@@ -9,7 +9,6 @@ const items: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', description: 'System overview' },
   { label: 'OpenList', path: '/openlist', description: 'Bridge source access' },
   { label: 'Providers', path: '/providers', description: 'Adapter registry' },
-  { label: 'Token', path: '/token', description: 'Access token management' },
   { label: 'Tasks', path: '/tasks', description: 'Download control center' },
   { label: 'Quota', path: '/quota', description: 'Capacity monitoring' },
   { label: 'Settings', path: '/settings', description: 'Policy and configuration' },

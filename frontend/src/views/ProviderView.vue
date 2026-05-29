@@ -117,7 +117,7 @@ onMounted(() => {
           </div>
         </div>
         
-        <p class="provider-card__section-title">账户ID</p>
+        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? '本地路径' : '账户ID' }}</p>
         <p class="provider-card__text">{{ provider.account_id || '未设置' }}</p>
         
         <p class="provider-card__section-title">配额使用</p>

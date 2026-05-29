@@ -37,7 +37,7 @@ func (p *LocalWindowsProvider) GetQuota(ctx context.Context, account *entity.Pro
 		return entity.Quota{}, fmt.Errorf("local windows provider: account is nil")
 	}
 
-	mountPoint,err := p.mountRepo.GetMountPointByProviderAccountID(account.ID)
+	mountPoint, err := p.mountRepo.GetMountPointByProviderAccountID(account.ID)
 	if err != nil {
 		return entity.Quota{}, fmt.Errorf("local windows provider: get mount point failed: %w", err)
 	}

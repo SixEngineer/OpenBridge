@@ -1,32 +1,21 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/types/api'
-import type { DownloadTask } from '@/types/download'
+import type { DownloadTask, DirectLinkResult } from '@/types/download'
 
-// 获取下载任务列表
-export function getTaskList(): Promise<ApiResponse<DownloadTask[]>> {
-  return request.get('/tasks')
-}
-
-// 获取单个任务详情
-export function getTaskDetail(taskId: string): Promise<ApiResponse<DownloadTask>> {
-  return request.get('/task', { params: { task_id: taskId } })
-}
-
-// 创建下载任务
+// 创建下载任务（后端：POST /download/tasks, body: {path, dir}）
 export function createTask(data: {
-  source_url: string
-  provider?: string
-  file_name?: string
+  path: string
+  dir?: string
 }): Promise<ApiResponse<{ task_id: string }>> {
-  return request.post('/task', data)
+  return request.post('/download/tasks', data)
 }
 
-// 取消任务
-export function cancelTask(taskId: string): Promise<ApiResponse<null>> {
-  return request.post('/task/cancel', { task_id: taskId })
+// 解析直链（后端：POST /download/resolve, body: {path})
+export function resolveDirectLink(path: string): Promise<ApiResponse<DirectLinkResult>> {
+  return request.post('/download/resolve', { path })
 }
 
-// 重试任务
-export function retryTask(taskId: string): Promise<ApiResponse<null>> {
-  return request.post('/task/retry', { task_id: taskId })
+// 获取单个任务详情（后端：GET /download/tasks/:id）
+export function getTaskDetail(taskId: string): Promise<ApiResponse<DownloadTask>> {
+  return request.get(`/download/tasks/${taskId}`)
 }

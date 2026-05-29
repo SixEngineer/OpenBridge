@@ -454,7 +454,7 @@ http://localhost:5173/dashboard
 
 ---
 
-## 2026-04-19 前后端接口对接完成
+## 2026-04-19 前后端接口对接
 
 ### 本次完成内容
 
@@ -564,4 +564,68 @@ http://localhost:5173/dashboard
 - 已从“方案说明”调整为“开发日志”
 - 当前内容只记录“到目前为止前端做了什么”
 - 后续开发应继续在此文件上追加，不应重写成最终总结
+
 ```
+
+## 2026-05-28 前端交互链路完善
+
+### 本次完成内容
+
+完善了前端多个模块的交互链路，打通从 Provider 注册 → Mount 创建 → 配额查看 → 文件浏览 → 下载的完整流程。
+
+- **Provider 表单重构**
+  - 将表单从"选择 OpenList 驱动"改为直接选择后端支持的三种 Provider 类型（通用/百度网盘/本地存储）
+  - 百度网盘类型显示 access_token 输入框
+  - 本地存储类型显示路径输入框，路径存入 account_id 字段
+  - Provider 卡片页对本地类型显示"本地路径"而非"账户ID"
+
+- **Quota 页面完善**
+  - 修复 MB 显示问题（后端以 MB 为单位返回，前端 formatBytes 按字节处理），增加 formatQuotaMB 中间转换函数
+  - 创建 Mount 时支持选择配额模式：Real（真实容量）/ Virtual（虚拟容量），Inherit 预留
+  - Virtual 模式可输入虚拟总容量（MB）
+  - 增加操作状态反馈提示（成功/失败）
+
+- **OpenList 文件列表增加下载入口**
+  - 文件列表每行增加"下载"按钮（仅文件类型）
+  - 点击后弹出下载确认弹窗
+  - 弹窗自动解析直链，显示文件名/大小/Provider/直链/是否走代理
+  - 可选填下载目录，确认后提交到 aria2
+
+- **下载任务列表改造**
+  - 从单任务创建页改为任务列表视图
+  - 显示所有历史任务，支持状态筛选（All/Active/Completed/Failed等）
+  - 每个任务显示文件名/大小/状态/进度/创建时间
+  - 点击行展开详情面板
+  - 活跃任务自动每 5 秒刷新，完成后自动停止
+
+### 涉及文件
+
+**新增文件：**
+- `frontend/src/components/download/DownloadDialog.vue`
+
+**修改文件：**
+- `frontend/src/views/OpenListView.vue`
+- `frontend/src/views/QuotaView.vue`
+- `frontend/src/views/DownloadTasksView.vue`
+- `frontend/src/views/ProviderView.vue`
+- `frontend/src/components/provider/ProviderFormDialog.vue`
+- `frontend/src/stores/console.ts`
+- `frontend/src/api/task.ts`
+- `frontend/src/types/download.ts`
+
+### 当前状态
+
+- Provider 表单已覆盖后端支持的三种类型
+- Quota 页面已支持 Real/Virtual 配额模式，Mount 创建后可查询和同步
+- 文件浏览到下载的链路已打通：OpenList 文件列表 → 下载弹窗 → 确认 → aria2
+- 下载任务列表可查看所有历史任务和实时进度
+- 本次所有改动不涉及后端代码
+
+### 后续待做
+
+- 下载确认弹窗成功后跳转到任务列表的交互优化
+- Inherit 配额模式需后端暴露 mount 列表 API 后再启用
+- aria2 未启动时的错误提示优化
+- 任务列表手动刷新按钮的加载状态细化
+
+---

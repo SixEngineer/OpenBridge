@@ -25,8 +25,11 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
-    console.error('Request Error:', error)
-    return Promise.reject(error)
+    // 提取后端返回的错误信息
+    const data = error?.response?.data
+    const msg = data?.msg || data?.message || error.message || 'Request Error'
+    console.error('Request Error:', msg)
+    return Promise.reject(new Error(msg))
   }
 )
 
