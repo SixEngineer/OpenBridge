@@ -22,6 +22,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// 后端 ProviderAccount 以 MB 存储配额，转成字节再格式化
+function formatProviderQuota(mb: number): string {
+  return formatBytes(mb * 1024 * 1024)
+}
+
 // 打开新增对话框
 function openAddDialog() {
   editingProvider.value = null
@@ -117,14 +122,14 @@ onMounted(() => {
           </div>
         </div>
         
-        <p class="provider-card__section-title">账户ID</p>
+        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? '本地路径' : '账户ID' }}</p>
         <p class="provider-card__text">{{ provider.account_id || '未设置' }}</p>
         
         <p class="provider-card__section-title">配额使用</p>
         <p class="provider-card__text">
-          总计: {{ formatBytes(provider.total_quota) }}<br>
-          已用: {{ formatBytes(provider.used_quota) }}<br>
-          可用: {{ formatBytes(provider.available_quota) }}
+          总计: {{ formatProviderQuota(provider.total_quota) }}<br>
+          已用: {{ formatProviderQuota(provider.used_quota) }}<br>
+          可用: {{ formatProviderQuota(provider.available_quota) }}
         </p>
         
         <p class="provider-card__section-title" v-if="provider.last_error">最近错误</p>

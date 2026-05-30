@@ -3,25 +3,20 @@ import { defineStore } from 'pinia'
 import { getProviderList, deleteProvider } from '@/api/provider'
 import type { ProviderRecord } from '@/types/provider'
 
-import { queryQuota, syncQuota } from '@/api/quota'
+import { createMount, queryMountQuota, syncMountQuota } from '@/api/mount'
+import type { MountPoint } from '@/types/mount'
 import type { QuotaInfo } from '@/types/quota'
 
 import { alertItems, metricCards, systemStatuses, taskDigests } from '@/mock/dashboard'
 import { quotaRecords } from '@/mock/quota'
-import { downloadTaskRecords } from '@/mock/tasks'
 
-import { getTaskList, createTask, cancelTask, retryTask } from '@/api/task'
-import type { DownloadTask } from '@/types/download'
-
-import { uploadToken } from '@/api/token'
-import type { Token } from '@/types/token'
+import { createTask } from '@/api/task'
 
 export const useConsoleStore = defineStore('console', () => {
   const metrics = ref(metricCards)
   const statuses = ref(systemStatuses)
   const tasks = ref(taskDigests)
   const alerts = ref(alertItems)
-  const taskTable = ref(downloadTaskRecords)
   const quotas = ref(quotaRecords)
 
   const providers = ref<ProviderRecord[]>([])
@@ -29,11 +24,23 @@ export const useConsoleStore = defineStore('console', () => {
   const currentQuota = ref<QuotaInfo | null>(null)
   const quotaLoading = ref(false)
 
-  const downloadTasks = ref<DownloadTask[]>([])
-  const tasksLoading = ref(false)
+  // provider_account_id → mount_id 映射
+  const mountIdByProvider = ref<Record<number, number>>({})
+  const mountCreating = ref(false)
 
-  const tokens = ref<Token[]>([])
-  const tokenLoading = ref(false)
+  // 登录状态
+  const isLoggedIn = ref(false)
+  const currentUser = ref('')
+
+  function login(username: string) {
+    isLoggedIn.value = true
+    currentUser.value = username
+  }
+
+  function logout() {
+    isLoggedIn.value = false
+    currentUser.value = ''
+  }
 
   // 获取 Provider 列表
   async function fetchProviders() {
@@ -63,14 +70,13 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 查询配额
-  async function fetchQuota(provider: string) {
+  // 通过 Mount 查询配额
+  async function queryQuotaByMount(mountId: number) {
     quotaLoading.value = true
     try {
-      const res = await queryQuota(provider)
-      // 改成兼容 code: 0 和 code: 1000
-      if (res.code === 0 || res.code === 1000) {
-        currentQuota.value = res.data
+      const res = await queryMountQuota(mountId)
+      if (res.code === 1000) {
+        currentQuota.value = res.data.quota
       }
       return res
     } catch (error) {
@@ -81,13 +87,13 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 同步配额
-  async function syncProviderQuota(provider: string) {
+  // 通过 Mount 同步配额
+  async function syncQuotaByMount(mountId: number) {
     quotaLoading.value = true
     try {
-      const res = await syncQuota(provider)
-      if (res.code === 0 || res.code === 1000) {
-        currentQuota.value = res.data
+      const res = await syncMountQuota(mountId)
+      if (res.code === 1000) {
+        currentQuota.value = res.data.quota
       }
       return res
     } catch (error) {
@@ -97,84 +103,80 @@ export const useConsoleStore = defineStore('console', () => {
       quotaLoading.value = false
     }
   }
-  // 获取任务列表
-  async function fetchTasks() {
-    tasksLoading.value = true
+
+  // 为指定 Provider 创建 Mount
+  async function createMountForProvider(
+    providerId: number,
+    providerName: string,
+    providerType: string,
+    rootPath?: string,
+    quotaMode: string = 'real',
+    virtualTotal?: number
+  ): Promise<MountPoint | null> {
+    mountCreating.value = true
     try {
-      const res = await getTaskList()
-      if (res.code === 0 || res.code === 1000) {
-        downloadTasks.value = res.data
+      const payload: Partial<MountPoint> = {
+        name: `${providerName} Mount`,
+        provider_account_id: providerId,
+        provider_type: providerType,
+        mount_path: `/mnt/${providerType}`,
+        provider_root_path: rootPath || '/',
+        quota_mode: quotaMode as 'real' | 'inherit' | 'virtual',
       }
-      return res
+      if (quotaMode === 'virtual' && virtualTotal !== undefined) {
+        payload.virtual_total = virtualTotal
+        payload.virtual_used = 0
+      }
+      const res = await createMount(payload)
+      if (res.code === 1000) {
+        mountIdByProvider.value[providerId] = res.data.id
+        return res.data
+      }
+      return null
     } catch (error) {
-      console.error('获取任务列表失败', error)
+      console.error('创建 Mount 失败', error)
       return null
     } finally {
-      tasksLoading.value = false
+      mountCreating.value = false
     }
   }
-
   // 创建任务
-  async function addTask(data: { source_url: string; provider?: string; file_name?: string }) {
+  async function addTask(data: { path: string; dir?: string }) {
+    const res = await createTask(data)
+    if (res.code === 1000) {
+      const taskId = (res.data as any).task_id || (res.data as any).TaskID
+      if (taskId) recordTaskId(taskId)
+    }
+    return res
+  }
+
+  // 下载任务 ID 列表（持久化到 localStorage）
+  const STORAGE_KEY = 'openbridge_download_task_ids'
+  const downloadTaskIds = ref<string[]>(loadTaskIds())
+
+  function loadTaskIds(): string[] {
     try {
-      const res = await createTask(data)
-      if (res.code === 0 || res.code === 1000) {
-        await fetchTasks()
-      }
-      return res
-    } catch (error) {
-      console.error('创建任务失败', error)
-      return null
+      const raw = localStorage.getItem(STORAGE_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  }
+
+  function saveTaskIds() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(downloadTaskIds.value))
+  }
+
+  function recordTaskId(id: string) {
+    if (!downloadTaskIds.value.includes(id)) {
+      downloadTaskIds.value.unshift(id)
+      saveTaskIds()
     }
   }
 
-  // 取消任务
-  async function cancelDownloadTask(taskId: string) {
-    try {
-      const res = await cancelTask(taskId)
-      if (res.code === 0 || res.code === 1000) {
-        await fetchTasks()
-      }
-      return res
-    } catch (error) {
-      console.error('取消任务失败', error)
-      return null
-    }
+  function removeTaskId(id: string) {
+    downloadTaskIds.value = downloadTaskIds.value.filter(x => x !== id)
+    saveTaskIds()
   }
 
-  // 重试任务
-  async function retryDownloadTask(taskId: string) {
-    try {
-      const res = await retryTask(taskId)
-      if (res.code === 0 || res.code === 1000) {
-        await fetchTasks()
-      }
-      return res
-    } catch (error) {
-      console.error('重试任务失败', error)
-      return null
-    }
-  }
-
-  async function saveToken(data: Partial<Token>) {
-    tokenLoading.value = true
-    try {
-      const res = await uploadToken(data)
-      if (res.code === 0 || res.code === 1000) {
-        // 成功后可以刷新列表（如果有列表接口的话）
-        return { success: true, message: '上传成功' }
-      }
-      return { success: false, message: res.msg || res.msg }
-    } catch (error) {
-      console.error('上传 Token 失败', error)
-      return { success: false, message: '上传失败' }
-    } finally {
-      tokenLoading.value = false
-    }
-  }
-
-
-  // 只有一个 return，放在最后
   return {
     metrics,
     statuses,
@@ -182,21 +184,22 @@ export const useConsoleStore = defineStore('console', () => {
     alerts,
     providers,
     quotas,
-    taskTable,
     fetchProviders,
     removeProvider,
     currentQuota,
     quotaLoading,
-    fetchQuota,
-    syncProviderQuota,
-    downloadTasks,
-    tasksLoading,
-    fetchTasks,
+    mountIdByProvider,
+    mountCreating,
+    queryQuotaByMount,
+    syncQuotaByMount,
+    createMountForProvider,
     addTask,
-    cancelDownloadTask,
-    retryDownloadTask,
-    tokens,
-    tokenLoading,
-    saveToken,
+    downloadTaskIds,
+    recordTaskId,
+    removeTaskId,
+    isLoggedIn,
+    currentUser,
+    login,
+    logout,
   }
 })

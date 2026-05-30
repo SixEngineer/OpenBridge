@@ -60,6 +60,7 @@ function enterConsole() {
         >
           {{ buttonLabel }}
         </button>
+        <router-link to="/login" class="portal-login-link">Sign in with credentials</router-link>
       </div>
     </section>
   </main>
@@ -270,6 +271,18 @@ function enterConsole() {
   100% {
     box-shadow: 0 0 0 26px rgba(115, 213, 255, 0);
   }
+}
+
+.portal-login-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: rgba(229, 242, 252, 0.6);
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.portal-login-link:hover {
+  color: rgba(229, 242, 252, 0.9);
 }
 
 @media (max-width: 920px) {
