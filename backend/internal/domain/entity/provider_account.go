@@ -12,6 +12,7 @@ type ProviderAccount struct {
 	AccessToken     string        `gorm:"column:access_token;type:text" json:"access_token"`
 	RefreshToken    string        `gorm:"column:refresh_token;type:text" json:"refresh_token"`
 	TokenExpiresAt  *time.Time    `gorm:"column:token_expires_at" json:"token_expires_at"`
+	AuthCookie      string        `gorm:"column:auth_cookie;type:text" json:"auth_cookie"`
 	TotalQuota      int64         `gorm:"column:total_quota" json:"total_quota"`
 	UsedQuota       int64         `gorm:"column:used_quota" json:"used_quota"`
 	AvailableQuota  int64         `gorm:"column:available_quota" json:"available_quota"`

@@ -517,6 +517,8 @@ func buildMountProviderByNetDisk(netDisk string, providerRepo *repository.Provid
 		return &providers.MockProvider{}
 	case "baidu": // 如果是baidu类型，返回BaiduProvider的新实例
 		return providers.NewBaiduProvider(providerRepo)
+	case "quark": // 如果是quark类型，返回QuarkProvider的新实例
+		return providers.NewQuarkProvider(providerRepo)
 	case "local": // Windows本地存储Provider，在Linux环境下不编译
 		return providers.NewLocalProvider(providerRepo, mountRepo)
 	default: // 其他不支持的类型返回nil
