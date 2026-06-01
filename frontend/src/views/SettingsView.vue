@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
 
@@ -16,6 +16,14 @@ const mountSummary = computed(() => {
   const ids = Object.keys(store.mountIdByProvider)
   return { count: ids.length, providers: ids }
 })
+
+// Default download directory
+const downloadDirInput = ref(store.defaultDownloadDir)
+const dirChanged = computed(() => downloadDirInput.value !== store.defaultDownloadDir)
+
+function saveDownloadDir() {
+  store.setDefaultDownloadDir(downloadDirInput.value.trim())
+}
 </script>
 
 <template>
@@ -89,8 +97,17 @@ const mountSummary = computed(() => {
             <code class="field__value">http://127.0.0.1:6800/jsonrpc</code>
           </div>
           <div class="field">
-            <span class="field__label">Download Dir</span>
-            <span class="field__value">—</span>
+            <span class="field__label">Default Download Directory</span>
+            <div class="dir-input-row">
+              <input
+                v-model="downloadDirInput"
+                class="dir-input"
+                placeholder="e.g. D:\Downloads"
+                @keyup.enter="saveDownloadDir"
+              />
+              <button class="btn btn--sm" @click="saveDownloadDir" :disabled="!dirChanged">Save</button>
+            </div>
+            <span class="field__hint">Leave empty to use aria2's configured default. Changes apply to new downloads.</span>
           </div>
         </div>
       </article>
@@ -173,5 +190,45 @@ code.field__value {
 
 .dot--unknown {
   background: #9ca3af;
+}
+
+.dir-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dir-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.dir-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+.btn--sm {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: #3b82f6;
+  color: white;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btn--sm:hover:not(:disabled) { background: #2563eb; }
+.btn--sm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.field__hint {
+  font-size: 12px;
+  color: #6b7280;
 }
 </style>

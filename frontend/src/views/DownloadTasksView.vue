@@ -9,7 +9,7 @@ const store = useConsoleStore()
 
 // ── Create task ──
 const sourcePath = ref('')
-const targetDir = ref('')
+const targetDir = ref(store.defaultDownloadDir)
 const creating = ref(false)
 const createError = ref('')
 

@@ -51,6 +51,15 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.removeItem(AUTH_KEY)
   }
 
+  // Default download directory — persisted to localStorage
+  const DD_KEY = 'openbridge_default_download_dir'
+  const defaultDownloadDir = ref(localStorage.getItem(DD_KEY) || '')
+
+  function setDefaultDownloadDir(dir: string) {
+    defaultDownloadDir.value = dir
+    localStorage.setItem(DD_KEY, dir)
+  }
+
   // 获取 Provider 列表
   async function fetchProviders() {
     try {
@@ -210,5 +219,7 @@ export const useConsoleStore = defineStore('console', () => {
     currentUser,
     login,
     logout,
+    defaultDownloadDir,
+    setDefaultDownloadDir,
   }
 })

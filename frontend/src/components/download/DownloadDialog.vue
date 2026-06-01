@@ -19,8 +19,8 @@ const creating = ref(false)
 const createError = ref('')
 const createdTaskId = ref('')
 
-// Download directory
-const targetDir = ref('')
+// Download directory (pre-filled from settings)
+const targetDir = ref(store.defaultDownloadDir)
 
 // Auto-resolve when dialog opens
 watch(() => props.visible, (v) => {
