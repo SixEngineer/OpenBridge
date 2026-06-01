@@ -28,18 +28,18 @@ const formData = ref<Partial<ProviderRecord>>({
 const netDiskOptions = [
   {
     value: 'mock',
-    label: '通用（推荐）',
-    desc: '通过 OpenList API 转发所有操作，适用于你在 OpenList 中配置的任何网盘'
+    label: 'Generic (Recommended)',
+    desc: 'Routes all operations through the OpenList API. Works with any drive configured in OpenList.'
   },
   {
     value: 'baidu',
-    label: '百度网盘（直连，需 token）',
-    desc: '百度网盘专用后端，可绕过 OpenList 直连下载，需要配置百度 access token'
+    label: 'Baidu Netdisk (Direct, needs token)',
+    desc: 'Dedicated Baidu backend with direct download support. Requires a Baidu access token.'
   },
   {
     value: 'local',
-    label: '本地存储',
-    desc: '读取 Windows 本地磁盘的真实容量，需指定盘符路径'
+    label: 'Local Storage',
+    desc: 'Reads real disk capacity from the local filesystem. Requires a drive path.'
   }
 ]
 
@@ -72,7 +72,7 @@ function handleClose() {
 }
 
 function handleSubmit() {
-  // 本地存储时，将路径存入 account_id 字段（后端不要求它，仅用于创建 Mount 时读取）
+  // For local storage, store the path in account_id (used when creating Mount)
   const data: Partial<ProviderRecord> = {
     ...formData.value,
     provider_type: formData.value.net_disk || 'mock',
@@ -89,18 +89,18 @@ function handleSubmit() {
   <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
     <div class="dialog">
       <div class="dialog__header">
-        <h3>{{ provider ? '编辑 Provider' : '注册 Provider' }}</h3>
+        <h3>{{ provider ? 'Edit Provider' : 'Register Provider' }}</h3>
         <button class="dialog__close" @click="handleClose">&times;</button>
       </div>
 
       <div class="dialog__body">
         <div class="form-group">
-          <label>名称 *</label>
-          <input v-model="formData.name" type="text" placeholder="如：我的夸克网盘" />
+          <label>Name *</label>
+          <input v-model="formData.name" type="text" placeholder="e.g. My Cloud Drive" />
         </div>
 
         <div class="form-group">
-          <label>存储后端类型</label>
+          <label>Backend Type</label>
           <select v-model="formData.net_disk">
             <option v-for="opt in netDiskOptions" :key="opt.value" :value="opt.value">
               {{ opt.label }}
@@ -111,35 +111,35 @@ function handleSubmit() {
           </small>
         </div>
 
-        <!-- 本地存储路径 -->
+        <!-- Local storage path -->
         <div v-if="formData.net_disk === 'local'" class="form-group">
-          <label>本地文件夹路径 *</label>
+          <label>Local Folder Path *</label>
           <input v-model="localPath" type="text" placeholder="C:\" />
           <small>
-            LocalWindowsProvider 会调用 <code>GetDiskFreeSpaceEx</code> 读取该路径所在磁盘的
-            真实总容量、已用和可用空间
+            Uses <code>GetDiskFreeSpaceEx</code> to read the real total, used, and available
+            capacity of the disk containing this path.
           </small>
         </div>
 
-        <!-- 百度 access_token -->
+        <!-- Baidu access token -->
         <div v-if="formData.net_disk === 'baidu'" class="form-group">
-          <label>百度 Access Token *</label>
-          <input v-model="formData.access_token" type="password" placeholder="粘贴百度 access_token" />
+          <label>Baidu Access Token *</label>
+          <input v-model="formData.access_token" type="password" placeholder="Paste Baidu access_token" />
           <small>
-            获取方式：打开 <code>https://pan.baidu.com</code> → F12 → Network → 过滤 <code>quota</code>，
-            在请求 URL 中找到 <code>access_token=xxx</code>，复制 <code>xxx</code> 部分
+            How to get: Open <code>https://pan.baidu.com</code> → F12 → Network → filter <code>quota</code>,
+            find <code>access_token=xxx</code> in the request URL, copy the <code>xxx</code> part.
           </small>
         </div>
 
-        <!-- 通用 / 百度 模式显示账户标识 -->
+        <!-- Account ID (for non-local types) -->
         <div v-if="formData.net_disk !== 'local'" class="form-group">
-          <label>账户标识（可选）</label>
-          <input v-model="formData.account_id" type="text" placeholder="仅用于备注" />
-          <small>方便你区分同一类型下的多个账户，不填也行</small>
+          <label>Account ID (optional)</label>
+          <input v-model="formData.account_id" type="text" placeholder="For reference only" />
+          <small>Helps distinguish multiple accounts of the same type. Can be left blank.</small>
         </div>
 
         <div v-if="provider" class="form-group">
-          <label>状态</label>
+          <label>Status</label>
           <select v-model="formData.status">
             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
               {{ opt.label }}
@@ -148,26 +148,26 @@ function handleSubmit() {
         </div>
 
         <div class="notice">
-          <strong>关于配额</strong>
+          <strong>About Quota</strong>
           <p v-if="formData.net_disk === 'baidu'">
-            选择百度网盘直连后，创建 Mount → 同步配额，BaiduProvider 会使用你提供的 access_token
-            直接调百度 API 获取真实容量数据。
+            After registration, create a Mount → sync quota. The BaiduProvider will use your access_token
+            to fetch real capacity data from the Baidu API.
           </p>
           <p v-else-if="formData.net_disk === 'local'">
-            选择本地存储后，创建 Mount → 同步配额，LocalWindowsProvider 会直接读取你指定的
-            磁盘路径的真实容量。这是当前唯一能显示真实配额的选项。
+            After registration, create a Mount → sync quota. The LocalWindowsProvider will read the
+            real disk capacity of the specified path.
           </p>
           <p v-else>
-            注册完成后，为该 Provider 创建 Mount（挂载点），然后在 Mount 页面同步配额即可。
-            通用模式下显示的是测试数据。
+            After registration, create a Mount, then sync quota on the Quota page.
+            Generic mode shows test data.
           </p>
         </div>
       </div>
 
       <div class="dialog__footer">
-        <button class="btn btn--secondary" @click="handleClose">取消</button>
+        <button class="btn btn--secondary" @click="handleClose">Cancel</button>
         <button class="btn btn--primary" @click="handleSubmit">
-          {{ provider ? '保存' : '注册' }}
+          {{ provider ? 'Save' : 'Register' }}
         </button>
       </div>
     </div>

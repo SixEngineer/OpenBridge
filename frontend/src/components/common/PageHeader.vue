@@ -12,7 +12,7 @@ defineProps<{
         <p class="page-header__eyebrow">Module</p>
         <h2>{{ title }}</h2>
       </div>
-      <!-- 新增：按钮插槽 -->
+      <!-- Actions slot -->
       <div v-if="$slots.actions" class="page-header__actions">
         <slot name="actions" />
       </div>

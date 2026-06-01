@@ -5,25 +5,25 @@ import { useConsoleStore } from '@/stores/console'
 
 const store = useConsoleStore()
 
-// 当前选中的 Provider ID
+// Currently selected Provider ID
 const selectedProviderId = ref<number | null>(null)
 
-// 当前选中的 Provider 对象
+// Currently selected Provider object
 const selectedProvider = computed(() => {
   if (selectedProviderId.value === null) return null
   return store.providers.find(p => p.id === selectedProviderId.value) ?? null
 })
 
-// 当前 provider 的 mountId（如果已创建）
+// Current provider's mountId (if created)
 const currentMountId = computed(() => {
   if (selectedProviderId.value === null) return null
   return store.mountIdByProvider[selectedProviderId.value] ?? null
 })
 
-// 是否有 mount
+// Whether mount exists
 const hasMount = computed(() => currentMountId.value !== null)
 
-// 配额模式选择
+// Quota mode selection
 const quotaMode = ref<'real' | 'inherit' | 'virtual'>('real')
 const virtualTotalInput = ref('')
 const virtualTotalMB = computed(() => {
@@ -31,7 +31,7 @@ const virtualTotalMB = computed(() => {
   return isNaN(n) || n <= 0 ? undefined : n
 })
 
-// 操作状态提示
+// Status toast
 const statusMessage = ref('')
 const statusIsError = ref(false)
 let statusTimer: ReturnType<typeof setTimeout> | null = null
@@ -42,7 +42,7 @@ function showStatus(msg: string, isError = false) {
   statusTimer = setTimeout(() => { statusMessage.value = '' }, isError ? 5000 : 2500)
 }
 
-// 格式化字节
+// Format bytes to human-readable
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -51,16 +51,16 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// 后端以 MB 为单位返回配额，先转成字节再格式化
+// Backend returns quota in MB, convert to bytes then format
 function formatQuotaMB(mb: number): string {
   return formatBytes(mb * 1024 * 1024)
 }
 
-// 创建 Mount
+// Create Mount
 async function handleCreateMount() {
   const p = selectedProvider.value
   if (!p) return
-  // 本地存储时，路径存在 account_id 中
+  // For local storage, the path is stored in account_id
   const rootPath = p.net_disk === 'local' ? p.account_id : undefined
   const mount = await store.createMountForProvider(
     p.id, p.name, p.provider_type, rootPath,
@@ -68,35 +68,35 @@ async function handleCreateMount() {
   )
   if (mount) {
     await store.queryQuotaByMount(mount.id)
-    showStatus('Mount 创建成功，请点击"同步配额"获取数据')
+    showStatus('Mount created successfully, click Sync Quota to get data')
   } else {
-    showStatus('创建 Mount 失败', true)
+    showStatus('Failed to create mount', true)
   }
 }
 
-// 查询配额（读本地缓存）
+// Query quota (read local cache)
 async function handleQuery() {
   if (currentMountId.value === null) return
   const res = await store.queryQuotaByMount(currentMountId.value)
   if (res && res.code === 1000) {
-    showStatus('已读取本地缓存配额')
+    showStatus('Local cache quota read')
   } else {
-    showStatus('查询失败：' + (res?.msg || '请查看控制台日志'), true)
+    showStatus('Query failed: ' + (res?.msg || 'check console'), true)
   }
 }
 
-// 同步配额（调远端 API）
+// Sync quota (call remote API)
 async function handleSync() {
   if (currentMountId.value === null) return
   const res = await store.syncQuotaByMount(currentMountId.value)
   if (res && res.code === 1000) {
-    showStatus('配额同步成功')
+    showStatus('Quota sync succeeded')
   } else {
-    showStatus('同步失败：' + (res?.msg || '请查看控制台日志'), true)
+    showStatus('Sync failed: ' + (res?.msg || 'check console'), true)
   }
 }
 
-// Provider 列表变化时默认选中第一个
+// Auto-select first provider when list changes
 watch(() => store.providers, (list) => {
   if (list.length > 0 && selectedProviderId.value === null) {
     selectedProviderId.value = list[0].id
@@ -112,16 +112,16 @@ onMounted(() => {
   <section class="page">
     <PageHeader
       title="Quota Management"
-      description="通过 Mount 挂载点查询和同步网盘配额"
+      description="Query and sync drive quota through Mount points"
     />
 
-    <!-- Provider 选择 + 操作区 -->
+    <!-- Provider select + actions -->
     <div class="quota-controls">
       <select
         v-model="selectedProviderId"
         class="provider-select"
       >
-        <option value="" disabled>请选择 Provider</option>
+        <option value="" disabled>Select a provider</option>
         <option
           v-for="p in store.providers"
           :key="p.id"
@@ -138,7 +138,7 @@ onMounted(() => {
           :disabled="store.mountCreating || (quotaMode === 'virtual' && !virtualTotalMB)"
           @click="handleCreateMount"
         >
-          {{ store.mountCreating ? '创建中...' : '创建 Mount 并查询配额' }}
+          {{ store.mountCreating ? 'Creating...' : 'Create Mount & Query Quota' }}
         </button>
 
         <template v-else-if="selectedProvider && hasMount">
@@ -147,46 +147,46 @@ onMounted(() => {
             :disabled="store.quotaLoading"
             @click="handleQuery"
           >
-            查询配额
+            Query Quota
           </button>
           <button
             class="btn btn--primary"
             :disabled="store.quotaLoading"
             @click="handleSync"
           >
-            {{ store.quotaLoading ? '同步中...' : '同步配额' }}
+            {{ store.quotaLoading ? 'Syncing...' : 'Sync Quota' }}
           </button>
         </template>
       </div>
     </div>
 
-    <!-- 配额模式选择（创建 mount 前显示） -->
+    <!-- Quota mode selection (shown before mount is created) -->
     <div v-if="selectedProvider && !hasMount" class="mode-section">
       <div class="mode-options">
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="real" />
           <div class="mode-option__body">
             <span class="mode-option__title">Real</span>
-            <span class="mode-option__desc">真实容量（从网盘/磁盘获取）</span>
+            <span class="mode-option__desc">Real capacity (from cloud/disk)</span>
           </div>
         </label>
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="virtual" />
           <div class="mode-option__body">
             <span class="mode-option__title">Virtual</span>
-            <span class="mode-option__desc">虚拟容量（手动指定总量）</span>
+            <span class="mode-option__desc">Virtual capacity (specify total manually)</span>
           </div>
         </label>
-        <label class="mode-option mode-option--disabled" title="需要已有的 Mount 作为父级，暂不可用">
+        <label class="mode-option mode-option--disabled" title="Requires an existing Mount as parent, not available yet">
           <input type="radio" disabled />
           <div class="mode-option__body">
             <span class="mode-option__title">Inherit</span>
-            <span class="mode-option__desc">继承父级配额（暂不可用）</span>
+            <span class="mode-option__desc">Inherit parent quota (not available)</span>
           </div>
         </label>
       </div>
       <div v-if="quotaMode === 'virtual'" class="virtual-input">
-        <label>虚拟总容量 (MB)</label>
+        <label>Virtual Total Capacity (MB)</label>
         <input
           v-model="virtualTotalInput"
           type="number"
@@ -197,31 +197,31 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 操作反馈 -->
+    <!-- Status feedback -->
     <transition name="fade">
       <div v-if="statusMessage" class="status-toast" :class="{ 'status-toast--error': statusIsError }">{{ statusMessage }}</div>
     </transition>
 
-    <!-- 配额卡片 -->
+    <!-- Quota card -->
     <div v-if="store.currentQuota" class="quota-card">
       <div class="quota-card__header">
         <h3>{{ store.currentQuota.provider }}</h3>
         <span class="quota-card__time">
-          更新时间: {{ new Date(store.currentQuota.updated_at).toLocaleString() }}
+          Updated: {{ new Date(store.currentQuota.updated_at).toLocaleString() }}
         </span>
       </div>
 
       <div class="quota-stats">
         <div class="quota-stat">
-          <span class="quota-stat__label">总配额</span>
+          <span class="quota-stat__label">Total</span>
           <span class="quota-stat__value">{{ formatQuotaMB(store.currentQuota.total) }}</span>
         </div>
         <div class="quota-stat">
-          <span class="quota-stat__label">已使用</span>
+          <span class="quota-stat__label">Used</span>
           <span class="quota-stat__value">{{ formatQuotaMB(store.currentQuota.used) }}</span>
         </div>
         <div class="quota-stat">
-          <span class="quota-stat__label">可用</span>
+          <span class="quota-stat__label">Available</span>
           <span class="quota-stat__value quota-stat__value--available">
             {{ formatQuotaMB(store.currentQuota.available) }}
           </span>
@@ -237,9 +237,9 @@ onMounted(() => {
     </div>
 
     <div v-else class="empty-state">
-      <p v-if="!selectedProvider">请先在 Providers 页面注册一个 Provider</p>
-      <p v-else-if="!hasMount">请点击"创建 Mount 并查询配额"</p>
-      <p v-else>暂无配额数据，请点击"查询配额"或"同步配额"</p>
+      <p v-if="!selectedProvider">Register a provider on the Providers page first</p>
+      <p v-else-if="!hasMount">Click "Create Mount & Query Quota"</p>
+      <p v-else>No quota data yet. Click "Query Quota" or "Sync Quota"</p>
     </div>
   </section>
 </template>
@@ -381,7 +381,7 @@ onMounted(() => {
   border: 1px dashed #d1d5db;
 }
 
-/* ── 配额模式选择 ── */
+/* ── Quota mode selection ── */
 .mode-section {
   margin-bottom: 20px;
   padding: 20px;

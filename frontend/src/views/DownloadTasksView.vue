@@ -7,7 +7,7 @@ import type { DownloadTask } from '@/types/download'
 
 const store = useConsoleStore()
 
-// ── 创建任务 ──
+// ── Create task ──
 const sourcePath = ref('')
 const targetDir = ref('')
 const creating = ref(false)
@@ -23,19 +23,19 @@ async function handleCreate() {
       dir: targetDir.value.trim() || undefined,
     })
     if (res.code !== 1000) {
-      createError.value = (res.msg as string) || '创建失败'
+      createError.value = (res.msg as string) || 'Create failed'
     } else {
       sourcePath.value = ''
       targetDir.value = ''
     }
   } catch (e: any) {
-    createError.value = e?.message || '请求异常'
+    createError.value = e?.message || 'Request error'
   } finally {
     creating.value = false
   }
 }
 
-// ── 任务列表 ──
+// ── Task list ──
 const tasks = ref<DownloadTask[]>([])
 const listLoading = ref(false)
 const listError = ref('')
@@ -52,14 +52,14 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(t => t.Status === statusFilter.value)
 })
 
-// 活跃状态（需要持续刷新）
+// Active statuses (need continuous refresh)
 const activeStatuses = ['pending', 'resolving', 'resolved', 'submitted', 'downloading']
 
 const hasActiveTasks = computed(() =>
   tasks.value.some(t => activeStatuses.includes(t.Status))
 )
 
-// 各状态数量
+// Count per status
 const statusCounts = computed(() => {
   const counts: Record<string, number> = { all: tasks.value.length }
   for (const t of tasks.value) {
@@ -84,7 +84,7 @@ async function fetchAllTasks() {
         results.push(res.data)
       }
     } catch {
-      // 单个失败跳过
+      // Skip individual failures
     }
   }
   tasks.value = results
@@ -95,7 +95,7 @@ function selectTask(taskId: string) {
   selectedTaskId.value = selectedTaskId.value === taskId ? null : taskId
 }
 
-// ── 自动刷新 ──
+// ── Auto refresh ──
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 function startAutoRefresh() {
@@ -116,7 +116,7 @@ function stopAutoRefresh() {
   }
 }
 
-// 手动刷新
+// Manual refresh
 async function handleRefresh() {
   await fetchAllTasks()
   if (hasActiveTasks.value) startAutoRefresh()
@@ -131,7 +131,7 @@ onUnmounted(() => {
   stopAutoRefresh()
 })
 
-// ── 工具函数 ──
+// ── Utilities ──
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -167,7 +167,7 @@ function formatTime(t: string | null | undefined): string {
       description="Manage all download tasks"
     />
 
-    <!-- 创建任务（紧凑） -->
+    <!-- Create task (compact) -->
     <section class="panel create-panel">
       <div class="create-form">
         <div class="create-form__field">
@@ -197,7 +197,7 @@ function formatTime(t: string | null | undefined): string {
       </div>
     </section>
 
-    <!-- 工具栏 -->
+    <!-- Toolbar -->
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
@@ -216,11 +216,11 @@ function formatTime(t: string | null | undefined): string {
       </button>
     </div>
 
-    <!-- 加载 / 错误 -->
+    <!-- Loading / Error -->
     <div v-if="listLoading && tasks.length === 0" class="loading-hint">Loading tasks...</div>
     <div v-if="listError" class="msg msg--error">{{ listError }}</div>
 
-    <!-- 任务列表 -->
+    <!-- Task list -->
     <div v-if="filteredTasks.length > 0" class="task-table">
       <div class="task-table__head">
         <span>File Name</span>
@@ -254,7 +254,7 @@ function formatTime(t: string | null | undefined): string {
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- Empty state -->
     <div v-if="!listLoading && filteredTasks.length === 0 && store.downloadTaskIds.length === 0" class="empty-state">
       <p>No download tasks yet. Create one above or from the file browser.</p>
     </div>
@@ -262,12 +262,12 @@ function formatTime(t: string | null | undefined): string {
       <p>No tasks match the current filter.</p>
     </div>
 
-    <!-- 活跃任务自动刷新提示 -->
+    <!-- Active task auto-refresh hint -->
     <div v-if="hasActiveTasks" class="live-hint">
       Auto-refreshing active tasks every 5s
     </div>
 
-    <!-- 任务详情展开 -->
+    <!-- Task detail expansion -->
     <transition name="slide">
       <div v-if="selectedTask" class="panel detail-panel">
         <div class="detail-panel__header">
@@ -345,7 +345,7 @@ function formatTime(t: string | null | undefined): string {
 </template>
 
 <style scoped>
-/* ── 创建任务（紧凑） ── */
+/* ── Create task (compact) ── */
 .create-panel {
   margin-bottom: 16px;
 }
@@ -375,7 +375,7 @@ function formatTime(t: string | null | undefined): string {
   box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
 }
 
-/* ── 工具栏 ── */
+/* ── Toolbar ── */
 .toolbar {
   display: flex;
   align-items: center;
@@ -428,7 +428,7 @@ function formatTime(t: string | null | undefined): string {
 .btn--sm:hover:not(:disabled) { background: #f9fafb; }
 .btn--sm:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* ── 任务列表 ── */
+/* ── Task table ── */
 .task-table {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -483,7 +483,7 @@ function formatTime(t: string | null | undefined): string {
   font-size: 13px;
 }
 
-/* ── 进度条（小） ── */
+/* ── Progress bar (mini) ── */
 .progress-mini {
   display: flex;
   align-items: center;
@@ -512,7 +512,7 @@ function formatTime(t: string | null | undefined): string {
   text-shadow: 0 0 4px white;
 }
 
-/* ── 状态标签 ── */
+/* ── Status badges ── */
 .badge {
   display: inline-block;
   padding: 3px 10px;
@@ -530,7 +530,7 @@ function formatTime(t: string | null | undefined): string {
 .badge--failed { background: #fef2f2; color: #dc2626; }
 .badge--cancelled { background: #f3f4f6; color: #6b7280; }
 
-/* ── 提示 ── */
+/* ── Hints ── */
 .loading-hint {
   color: #6b7280;
   font-size: 14px;
@@ -562,7 +562,7 @@ function formatTime(t: string | null | undefined): string {
   border: 1px dashed #d1d5db;
 }
 
-/* ── 详情展开 ── */
+/* ── Detail panel ── */
 .detail-panel {
   margin-bottom: 16px;
 }
@@ -616,7 +616,7 @@ function formatTime(t: string | null | undefined): string {
 
 .text--error { color: #dc2626; }
 
-/* ── 进度条（大） ── */
+/* ── Progress bar (large) ── */
 .progress-bar {
   display: flex;
   align-items: center;
@@ -644,7 +644,7 @@ function formatTime(t: string | null | undefined): string {
   text-shadow: 0 0 4px white;
 }
 
-/* ── 展开动画 ── */
+/* ── Slide animation ── */
 .slide-enter-active, .slide-leave-active {
   transition: all 0.25s ease;
 }
@@ -653,7 +653,7 @@ function formatTime(t: string | null | undefined): string {
   transform: translateY(-10px);
 }
 
-/* ── 按钮 ── */
+/* ── Buttons ── */
 .btn {
   padding: 10px 20px;
   border-radius: 8px;
@@ -667,7 +667,7 @@ function formatTime(t: string | null | undefined): string {
 .btn--primary { background: #3b82f6; color: white; }
 .btn--primary:hover:not(:disabled) { background: #2563eb; }
 
-/* ── 面板 ── */
+/* ── Panel ── */
 .panel {
   background: white;
   border-radius: 12px;

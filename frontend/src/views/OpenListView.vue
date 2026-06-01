@@ -11,7 +11,7 @@ const filesLoading = ref(false)
 const filesError = ref('')
 const contentProvider = ref('')
 
-// 下载弹窗
+// Download dialog
 const downloadDialogVisible = ref(false)
 const downloadFilePath = ref('')
 
@@ -22,7 +22,7 @@ function openDownload(file: any) {
 }
 
 function onDownloadSuccess(taskId: string) {
-  // 弹窗保持打开以显示成功状态，用户手动关闭
+  // Dialog stays open to show success, user closes manually
 }
 
 async function fetchFiles() {
@@ -139,7 +139,7 @@ onMounted(fetchFiles)
               class="btn-download"
               @click="openDownload(f)"
             >
-              下载
+              Download
             </button>
           </span>
         </div>
@@ -149,7 +149,7 @@ onMounted(fetchFiles)
       </p>
     </section>
 
-    <!-- 下载确认弹窗 -->
+    <!-- Download dialog -->
     <DownloadDialog
       :visible="downloadDialogVisible"
       :file-path="downloadFilePath"

@@ -9,20 +9,20 @@ const store = useConsoleStore()
 const props = defineProps<{ visible: boolean; filePath: string }>()
 const emit = defineEmits<{ close: []; success: [taskId: string] }>()
 
-// 解析结果
+// Resolve state
 const resolving = ref(false)
 const resolveError = ref('')
 const linkResult = ref<DirectLinkResult | null>(null)
 
-// 创建任务
+// Create state
 const creating = ref(false)
 const createError = ref('')
 const createdTaskId = ref('')
 
-// 目标目录
+// Download directory
 const targetDir = ref('')
 
-// 弹窗打开时自动解析
+// Auto-resolve when dialog opens
 watch(() => props.visible, (v) => {
   if (v && props.filePath) {
     resolveLink()
@@ -40,10 +40,10 @@ async function resolveLink() {
     if (res.code === 1000) {
       linkResult.value = res.data
     } else {
-      resolveError.value = (res.msg as string) || '解析失败'
+      resolveError.value = (res.msg as string) || 'Resolve failed'
     }
   } catch (e: any) {
-    resolveError.value = e?.message || '请求异常'
+    resolveError.value = e?.message || 'Request error'
   } finally {
     resolving.value = false
   }
@@ -63,10 +63,10 @@ async function handleConfirm() {
       store.recordTaskId(createdTaskId.value)
       emit('success', createdTaskId.value)
     } else {
-      createError.value = (res.msg as string) || '创建失败'
+      createError.value = (res.msg as string) || 'Create failed'
     }
   } catch (e: any) {
-    createError.value = e?.message || '请求异常'
+    createError.value = e?.message || 'Request error'
   } finally {
     creating.value = false
   }
@@ -91,29 +91,29 @@ function formatBytes(bytes: number): string {
       <div v-if="visible" class="overlay" @click.self="handleClose">
         <div class="dialog">
           <div class="dialog__header">
-            <h3>下载确认</h3>
+            <h3>Download Confirmation</h3>
             <button class="dialog__close" @click="handleClose">&times;</button>
           </div>
 
           <div class="dialog__body">
-            <!-- 路径信息 -->
+            <!-- File path -->
             <div class="info-row">
-              <span class="info-row__label">文件路径</span>
+              <span class="info-row__label">File Path</span>
               <code class="info-row__value">{{ filePath }}</code>
             </div>
 
-            <!-- 解析中 -->
-            <div v-if="resolving" class="state-hint">正在解析直链...</div>
+            <!-- Loading state -->
+            <div v-if="resolving" class="state-hint">Resolving direct link...</div>
             <div v-else-if="resolveError" class="msg msg--error">{{ resolveError }}</div>
 
-            <!-- 解析结果 -->
+            <!-- Resolve result -->
             <template v-else-if="linkResult">
               <div class="info-row">
-                <span class="info-row__label">文件名</span>
+                <span class="info-row__label">File Name</span>
                 <span class="info-row__value">{{ linkResult.Name }}</span>
               </div>
               <div class="info-row">
-                <span class="info-row__label">文件大小</span>
+                <span class="info-row__label">File Size</span>
                 <span class="info-row__value">{{ formatBytes(linkResult.Size) }}</span>
               </div>
               <div class="info-row">
@@ -121,23 +121,23 @@ function formatBytes(bytes: number): string {
                 <span class="info-row__value">{{ linkResult.Provider }}</span>
               </div>
               <div class="info-row">
-                <span class="info-row__label">直链</span>
+                <span class="info-row__label">Direct Link</span>
                 <code class="info-row__value truncate">{{ linkResult.DirectLink }}</code>
               </div>
               <div class="info-row">
-                <span class="info-row__label">代理</span>
+                <span class="info-row__label">Proxy</span>
                 <span class="badge" :class="linkResult.IsOpenListProxy ? 'badge--yes' : 'badge--no'">
-                  {{ linkResult.IsOpenListProxy ? '是 (经过 OpenList)' : '否 (直连)' }}
+                  {{ linkResult.IsOpenListProxy ? 'Yes (via OpenList)' : 'No (Direct)' }}
                 </span>
               </div>
 
-              <!-- 目标目录输入 -->
+              <!-- Download directory input -->
               <div class="form-field" style="margin-top: 16px;">
-                <label class="info-row__label">下载目录（可选）</label>
+                <label class="info-row__label">Download Directory (optional)</label>
                 <input
                   v-model="targetDir"
                   class="path-input"
-                  placeholder="留空使用默认下载目录"
+                  placeholder="Leave empty for default download directory"
                 />
               </div>
 
@@ -147,14 +147,14 @@ function formatBytes(bytes: number): string {
 
               <div v-if="createdTaskId" class="success-row">
                 <span class="success-icon">&#10003;</span>
-                <span>任务已创建：<code>{{ createdTaskId }}</code></span>
+                <span>Task created: <code>{{ createdTaskId }}</code></span>
               </div>
             </template>
           </div>
 
           <div class="dialog__footer">
             <button class="btn btn--secondary" @click="handleClose" :disabled="creating">
-              {{ createdTaskId ? '关闭' : '取消' }}
+              {{ createdTaskId ? 'Close' : 'Cancel' }}
             </button>
             <button
               v-if="linkResult && !createdTaskId"
@@ -162,14 +162,14 @@ function formatBytes(bytes: number): string {
               :disabled="creating || resolving"
               @click="handleConfirm"
             >
-              {{ creating ? '提交中...' : '提交到 aria2' }}
+              {{ creating ? 'Submitting...' : 'Submit to aria2' }}
             </button>
             <button
               v-if="createdTaskId"
               class="btn btn--primary"
               @click="handleClose"
             >
-              完成
+              Done
             </button>
           </div>
         </div>

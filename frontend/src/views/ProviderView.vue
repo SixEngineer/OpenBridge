@@ -9,11 +9,10 @@ import { registerProvider, updateProvider } from '@/api/provider'
 
 const store = useConsoleStore()
 
-// 对话框状态
+// Dialog state
 const dialogVisible = ref(false)
 const editingProvider = ref<ProviderRecord | null>(null)
 
-// 格式化字节为可读大小
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -22,24 +21,21 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// 后端 ProviderAccount 以 MB 存储配额，转成字节再格式化
+// Backend stores quota in MB, convert to bytes for formatting
 function formatProviderQuota(mb: number): string {
   return formatBytes(mb * 1024 * 1024)
 }
 
-// 打开新增对话框
 function openAddDialog() {
   editingProvider.value = null
   dialogVisible.value = true
 }
 
-// 打开编辑对话框
 function openEditDialog(provider: ProviderRecord) {
   editingProvider.value = provider
   dialogVisible.value = true
 }
 
-// 提交表单（区分新增和编辑）
 async function handleSubmit(data: Partial<ProviderRecord>) {
   try {
     let res
@@ -48,32 +44,31 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
     } else {
       res = await registerProvider(data)
     }
-    
+
     if (res.code === 1000 || res.code === 0) {
-      alert(editingProvider.value ? '更新成功！' : '注册成功！')
+      alert(editingProvider.value ? 'Updated successfully!' : 'Registered successfully!')
       dialogVisible.value = false
       editingProvider.value = null
       await store.fetchProviders()
     } else {
-      alert('操作失败：' + (res.msg))
+      alert('Failed: ' + (res.msg))
     }
   } catch (error) {
-    console.error('操作失败', error)
-    alert('操作失败，请稍后重试')
+    console.error('Operation failed', error)
+    alert('Operation failed, please try again')
   }
 }
 
-// 删除处理
 async function handleDelete(provider: ProviderRecord) {
-  if (!confirm(`确定要删除 "${provider.name}" 吗？`)) {
+  if (!confirm(`Delete "${provider.name}"?`)) {
     return
   }
-  
+
   const success = await store.removeProvider(provider.id)
   if (success) {
-    alert('删除成功！')
+    alert('Deleted successfully!')
   } else {
-    alert('删除失败，请稍后重试')
+    alert('Delete failed, please try again')
   }
 }
 
@@ -84,16 +79,16 @@ onMounted(() => {
 
 <template>
   <section class="page">
-    <PageHeader title="Providers" description="网盘服务商管理">
+    <PageHeader title="Providers" description="Cloud drive provider management">
       <template #actions>
         <button class="btn btn--primary" @click="openAddDialog">
-          + 注册 Provider
+          + Register Provider
         </button>
       </template>
     </PageHeader>
 
     <div v-if="store.providers.length === 0" class="empty-state">
-      <p>暂无 Provider，点击上方按钮注册</p>
+      <p>No providers yet. Click the button above to register one.</p>
     </div>
 
     <div v-else class="provider-grid">
@@ -108,31 +103,31 @@ onMounted(() => {
             <button 
               class="provider-card__edit" 
               @click="openEditDialog(provider)"
-              title="编辑"
+              title="Edit"
             >
               ✏️
             </button>
             <button 
               class="provider-card__delete" 
               @click="handleDelete(provider)"
-              title="删除"
+              title="Delete"
             >
               🗑️
             </button>
           </div>
         </div>
         
-        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? '本地路径' : '账户ID' }}</p>
-        <p class="provider-card__text">{{ provider.account_id || '未设置' }}</p>
+        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? 'Local Path' : 'Account ID' }}</p>
+        <p class="provider-card__text">{{ provider.account_id || 'Not set' }}</p>
         
-        <p class="provider-card__section-title">配额使用</p>
+        <p class="provider-card__section-title">Quota Usage</p>
         <p class="provider-card__text">
-          总计: {{ formatProviderQuota(provider.total_quota) }}<br>
-          已用: {{ formatProviderQuota(provider.used_quota) }}<br>
-          可用: {{ formatProviderQuota(provider.available_quota) }}
+          Total: {{ formatProviderQuota(provider.total_quota) }}<br>
+          Used: {{ formatProviderQuota(provider.used_quota) }}<br>
+          Available: {{ formatProviderQuota(provider.available_quota) }}
         </p>
         
-        <p class="provider-card__section-title" v-if="provider.last_error">最近错误</p>
+        <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>
         <p class="provider-card__text provider-card__text--error" v-if="provider.last_error">
           {{ provider.last_error }}
         </p>

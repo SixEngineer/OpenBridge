@@ -28,18 +28,27 @@ export const useConsoleStore = defineStore('console', () => {
   const mountIdByProvider = ref<Record<number, number>>({})
   const mountCreating = ref(false)
 
-  // 登录状态
-  const isLoggedIn = ref(false)
-  const currentUser = ref('')
+  // Auth state — persisted across page refreshes
+  const AUTH_KEY = 'openbridge_auth'
+  const storedAuth = (() => {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  })()
+  const isLoggedIn = ref(storedAuth !== null)
+  const currentUser = ref(storedAuth?.username ?? '')
 
   function login(username: string) {
     isLoggedIn.value = true
     currentUser.value = username
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ username }))
   }
 
   function logout() {
     isLoggedIn.value = false
     currentUser.value = ''
+    localStorage.removeItem(AUTH_KEY)
   }
 
   // 获取 Provider 列表
