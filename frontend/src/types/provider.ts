@@ -1,18 +1,19 @@
 import type { HealthState } from './common'
 
 export interface ProviderRecord {
-  id: number                      // 数字类型
+  id: number
   name: string
-  provider_type: string           // 服务商类型（如 aliyun、baidu）
-  net_disk: string                // 网盘类型
-  account_id: string              // 账户ID
-  status: HealthState             // 状态
+  provider_type: string
+  net_disk: string
+  account_id: string
+  status: HealthState
   access_token?: string
   refresh_token?: string
   token_expires_at?: string
-  total_quota: number             // 总配额（字节）
-  used_quota: number              // 已用配额
-  available_quota: number         // 可用配额
+  auth_cookie?: string
+  total_quota: number
+  used_quota: number
+  available_quota: number
   last_quota_sync_at?: string
   last_error?: string
   created_at: string

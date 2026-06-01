@@ -53,9 +53,9 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
     } else {
       alert('Failed: ' + (res.msg))
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Operation failed', error)
-    alert('Operation failed, please try again')
+    alert('Error: ' + (error?.message || 'Operation failed, please try again'))
   }
 }
 

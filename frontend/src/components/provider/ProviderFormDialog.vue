@@ -19,6 +19,7 @@ const formData = ref<Partial<ProviderRecord>>({
   net_disk: 'mock',
   account_id: '',
   access_token: '',
+  auth_cookie: '',
   status: 'active',
   total_quota: 0,
   used_quota: 0,
@@ -35,6 +36,11 @@ const netDiskOptions = [
     value: 'baidu',
     label: 'Baidu Netdisk (Direct, needs token)',
     desc: 'Dedicated Baidu backend with direct download support. Requires a Baidu access token.'
+  },
+  {
+    value: 'quark',
+    label: 'Quark Netdisk',
+    desc: 'Dedicated Quark backend with quota sync support. Requires a Quark cookie.'
   },
   {
     value: 'local',
@@ -58,6 +64,7 @@ watch(() => props.provider, (val) => {
       net_disk: 'mock',
       account_id: '',
       access_token: '',
+      auth_cookie: '',
       status: 'active',
       total_quota: 0,
       used_quota: 0,
@@ -131,6 +138,17 @@ function handleSubmit() {
           </small>
         </div>
 
+        <!-- Quark cookie -->
+        <div v-if="formData.net_disk === 'quark'" class="form-group">
+          <label>Quark Cookie *</label>
+          <input v-model="formData.auth_cookie" type="password" placeholder="Paste Quark cookie string" />
+          <small>
+            How to get: Open <code>https://pan.quark.cn</code> → F12 → Network → click any request →
+            find <code>Cookie</code> in request headers → right-click copy value.
+            The cookie must contain <code>__pus</code> and <code>__t</code> fields.
+          </small>
+        </div>
+
         <!-- Account ID (for non-local types) -->
         <div v-if="formData.net_disk !== 'local'" class="form-group">
           <label>Account ID (optional)</label>
@@ -152,6 +170,10 @@ function handleSubmit() {
           <p v-if="formData.net_disk === 'baidu'">
             After registration, create a Mount → sync quota. The BaiduProvider will use your access_token
             to fetch real capacity data from the Baidu API.
+          </p>
+          <p v-else-if="formData.net_disk === 'quark'">
+            After registration, create a Mount → sync quota. The QuarkProvider will use your cookie
+            to fetch real capacity data from the Quark API. Direct download is not supported.
           </p>
           <p v-else-if="formData.net_disk === 'local'">
             After registration, create a Mount → sync quota. The LocalWindowsProvider will read the
