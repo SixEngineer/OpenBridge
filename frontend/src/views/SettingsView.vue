@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
+import { getDrivers } from '@/api/storage'
 
 const store = useConsoleStore()
 
@@ -24,6 +25,30 @@ const dirChanged = computed(() => downloadDirInput.value !== store.defaultDownlo
 function saveDownloadDir() {
   store.setDefaultDownloadDir(downloadDirInput.value.trim())
 }
+
+// OpenList status
+const openListStatus = ref<'active' | 'error' | 'unknown'>('unknown')
+const openListDetail = ref('Checking...')
+
+async function checkOpenList() {
+  try {
+    const res = await getDrivers()
+    if (res.code === 1000 || res.code === 0) {
+      openListStatus.value = 'active'
+      openListDetail.value = `Connected — ${res.data?.length || 0} driver(s) available`
+    } else {
+      openListStatus.value = 'error'
+      openListDetail.value = 'API error'
+    }
+  } catch (e: any) {
+    openListStatus.value = 'error'
+    openListDetail.value = 'Not connected (configure in OpenList desktop)'
+  }
+}
+
+onMounted(() => {
+  checkOpenList()
+})
 </script>
 
 <template>
@@ -62,8 +87,8 @@ function saveDownloadDir() {
           <div class="field">
             <span class="field__label">Status</span>
             <span class="field__value">
-              <span class="dot dot--unknown"></span>
-              Not connected (configure in OpenList desktop)
+              <span class="dot" :class="`dot--${openListStatus}`"></span>
+              {{ openListDetail }}
             </span>
           </div>
         </div>
@@ -190,6 +215,14 @@ code.field__value {
 
 .dot--unknown {
   background: #9ca3af;
+}
+
+.dot--active {
+  background: #10b981;
+}
+
+.dot--error {
+  background: #ef4444;
 }
 
 .dir-input-row {
