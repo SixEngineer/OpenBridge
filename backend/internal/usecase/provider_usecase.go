@@ -80,6 +80,8 @@ func (p *ProviderUseCase) UpdateProvider(providerAccount entity.ProviderAccount)
 		p.ProviderRegistry.Register(providerAccount.Name, providers.NewBaiduProvider(p.ProviderRepo))
 	case "quark":
 		p.ProviderRegistry.Register(providerAccount.Name, providers.NewQuarkProvider(p.ProviderRepo))
+	case "local": // Windows本地存储Provider，在Linux环境下不编译
+		p.ProviderRegistry.Register(providerAccount.Name, providers.NewLocalProvider(p.ProviderRepo, p.MountRepo))
 	// case "local_windows": // Windows本地存储Provider，在Linux环境下不编译
 	// 	p.ProviderRegistry.Register(providerAccount.Name, &providers.LocalWindowsProvider{})
 	// case "local_linux": // Linux本地存储Provider，在Windows环境下不编译

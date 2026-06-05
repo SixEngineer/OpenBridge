@@ -53,4 +53,6 @@ const (
 
 	ErrorCodeDownloadGetFailed = 1023 // 获取下载任务失败
 
+	ErrorCodeResetFailed = 1024 // 重置用户数据失败
+
 )

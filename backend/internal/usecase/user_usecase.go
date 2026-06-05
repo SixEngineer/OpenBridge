@@ -7,15 +7,19 @@ import (
 	"net/http"
 	"openbridge/backend/internal/config"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type UserUseCase struct {
 	config *config.Config
+	db     *gorm.DB
 }
 
-func NewUserUseCase(config *config.Config) *UserUseCase {
+func NewUserUseCase(config *config.Config, db *gorm.DB) *UserUseCase {
 	return &UserUseCase{
 		config: config,
+		db:     db,
 	}
 }
 
@@ -80,4 +84,31 @@ func (uc *UserUseCase) Login(username, password string) error {
 	uc.config.OpenList.Token = result.Data.Token
 
 	return nil
+}
+
+func (uc *UserUseCase) Reset() error { 
+
+	err := uc.ClearAllTables(uc.db)
+	if err != nil {
+	    return err
+	}
+	return nil
+}
+
+func (uc *UserUseCase) ClearAllTables(db *gorm.DB) error {
+    // 获取所有表名
+    var tables []string
+    db.Raw("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&tables)
+    
+    // 事务清空
+    return db.Transaction(func(tx *gorm.DB) error {
+        tx.Exec("PRAGMA foreign_keys = OFF")
+        for _, table := range tables {
+            tx.Exec(fmt.Sprintf("DELETE FROM %s", table))
+            // tx.Exec(fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name = ?", table))
+        }
+        tx.Exec("PRAGMA foreign_keys = ON")
+        tx.Exec("VACUUM")
+        return nil
+    })
 }

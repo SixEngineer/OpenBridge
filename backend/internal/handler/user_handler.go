@@ -42,3 +42,15 @@ func (h *UserHandler) UserLogin(c *gin.Context) {
 	// 返回登录成功的结果
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: nil})
 }
+
+// 重置用户数据
+func (h *UserHandler) Reset(c *gin.Context) { 
+
+	err := h.userUseCase.Reset()
+	if err != nil {
+	    c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeResetFailed, Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: nil})
+}
