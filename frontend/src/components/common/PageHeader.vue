@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 defineProps<{
   title: string
   description: string
@@ -9,7 +13,7 @@ defineProps<{
   <div class="page-header">
     <div class="page-header__top">
       <div>
-        <p class="page-header__eyebrow">Module</p>
+        <p class="page-header__eyebrow">{{ t('page_header.module') }}</p>
         <h2>{{ title }}</h2>
       </div>
       <!-- Actions slot -->

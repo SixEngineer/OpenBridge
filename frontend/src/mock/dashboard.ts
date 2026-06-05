@@ -8,9 +8,9 @@ export const metricCards: MetricCardData[] = [
 ]
 
 export const systemStatuses: SystemStatus[] = [
-  { name: 'OpenList', state: 'healthy', detail: 'Connection tested and responding' },
-  { name: 'aria2', state: 'healthy', detail: 'RPC worker available' },
-  { name: 'Quota Sync', state: 'warning', detail: 'Last refresh delayed by 18 minutes' },
+  { name: 'OpenList', state: 'active', detail: 'Connection tested and responding' },
+  { name: 'aria2', state: 'active', detail: 'RPC worker available' },
+  { name: 'Quota Sync', state: 'disabled', detail: 'Last refresh delayed by 18 minutes' },
 ]
 
 export const taskDigests: TaskDigest[] = [

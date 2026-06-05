@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { NavItem } from '@/types/common'
 
+const { t } = useI18n()
 const route = useRoute()
 
 const items: NavItem[] = [
-  { label: 'Dashboard', path: '/dashboard', description: 'System overview' },
-  { label: 'OpenList', path: '/openlist', description: 'Bridge source access' },
-  { label: 'Providers', path: '/providers', description: 'Adapter registry' },
-  { label: 'Tasks', path: '/tasks', description: 'Download control center' },
-  { label: 'Quota', path: '/quota', description: 'Capacity monitoring' },
-  { label: 'Settings', path: '/settings', description: 'Policy and configuration' },
-  { label: 'Debug', path: '/debug', description: 'Trace and diagnostics' },
+  { label: 'Dashboard', path: '/dashboard', description: 'System overview', i18nKey: 'dashboard', i18nDescKey: 'dashboard_desc' },
+  { label: 'OpenList', path: '/openlist', description: 'Bridge source access', i18nKey: 'openlist', i18nDescKey: 'openlist_desc' },
+  { label: 'Providers', path: '/providers', description: 'Adapter registry', i18nKey: 'providers', i18nDescKey: 'providers_desc' },
+  { label: 'Tasks', path: '/tasks', description: 'Download control center', i18nKey: 'tasks', i18nDescKey: 'tasks_desc' },
+  { label: 'Quota', path: '/quota', description: 'Capacity monitoring', i18nKey: 'quota', i18nDescKey: 'quota_desc' },
+  { label: 'Settings', path: '/settings', description: 'Policy and configuration', i18nKey: 'settings', i18nDescKey: 'settings_desc' },
+  { label: 'Debug', path: '/debug', description: 'Trace and diagnostics', i18nKey: 'debug', i18nDescKey: 'debug_desc' },
 ]
 
 const activePath = computed(() => route.path)
@@ -24,8 +26,8 @@ const activePath = computed(() => route.path)
       <div class="brand">
         <span class="brand__mark">OB</span>
         <div>
-          <p class="brand__title">OpenBridge</p>
-          <p class="brand__subtitle">Download orchestration console</p>
+          <p class="brand__title">{{ t('app.name') }}</p>
+          <p class="brand__subtitle">{{ t('app.tagline') }}</p>
         </div>
       </div>
 
@@ -37,15 +39,15 @@ const activePath = computed(() => route.path)
           class="nav__link"
           :class="{ 'nav__link--active': activePath === item.path }"
         >
-          <span class="nav__label">{{ item.label }}</span>
-          <span class="nav__description">{{ item.description }}</span>
+          <span class="nav__label">{{ item.i18nKey ? t('sidebar.items.' + item.i18nKey) : item.label }}</span>
+          <span class="nav__description">{{ item.i18nDescKey ? t('sidebar.items.' + item.i18nDescKey) : item.description }}</span>
         </RouterLink>
       </nav>
     </div>
 
     <div class="sidebar__footer">
-      <p class="sidebar__eyebrow">Focus</p>
-      <p class="sidebar__note">Make the platform observable before the backend is complete.</p>
+      <p class="sidebar__eyebrow">{{ t('sidebar.focus') }}</p>
+      <p class="sidebar__note">{{ t('sidebar.note') }}</p>
     </div>
   </aside>
 </template>

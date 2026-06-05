@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { resolveDirectLink, createTask } from '@/api/task'
 import { useConsoleStore } from '@/stores/console'
 import type { DirectLinkResult } from '@/types/download'
 
 const store = useConsoleStore()
+const { t } = useI18n()
 
 const props = defineProps<{ visible: boolean; filePath: string }>()
 const emit = defineEmits<{ close: []; success: [taskId: string] }>()
@@ -40,10 +42,10 @@ async function resolveLink() {
     if (res.code === 1000) {
       linkResult.value = res.data
     } else {
-      resolveError.value = (res.msg as string) || 'Resolve failed'
+      resolveError.value = (res.msg as string) || t('download_dialog.resolve_failed')
     }
   } catch (e: any) {
-    resolveError.value = e?.message || 'Request error'
+    resolveError.value = e?.message || t('common.request_error')
   } finally {
     resolving.value = false
   }
@@ -63,10 +65,10 @@ async function handleConfirm() {
       store.recordTaskId(createdTaskId.value)
       emit('success', createdTaskId.value)
     } else {
-      createError.value = (res.msg as string) || 'Create failed'
+      createError.value = (res.msg as string) || t('download_dialog.create_failed')
     }
   } catch (e: any) {
-    createError.value = e?.message || 'Request error'
+    createError.value = e?.message || t('common.request_error')
   } finally {
     creating.value = false
   }
@@ -91,53 +93,53 @@ function formatBytes(bytes: number): string {
       <div v-if="visible" class="overlay" @click.self="handleClose">
         <div class="dialog">
           <div class="dialog__header">
-            <h3>Download Confirmation</h3>
+            <h3>{{ t('download_dialog.title') }}</h3>
             <button class="dialog__close" @click="handleClose">&times;</button>
           </div>
 
           <div class="dialog__body">
             <!-- File path -->
             <div class="info-row">
-              <span class="info-row__label">File Path</span>
+              <span class="info-row__label">{{ t('download_dialog.file_path') }}</span>
               <code class="info-row__value">{{ filePath }}</code>
             </div>
 
             <!-- Loading state -->
-            <div v-if="resolving" class="state-hint">Resolving direct link...</div>
+            <div v-if="resolving" class="state-hint">{{ t('download_dialog.resolving') }}</div>
             <div v-else-if="resolveError" class="msg msg--error">{{ resolveError }}</div>
 
             <!-- Resolve result -->
             <template v-else-if="linkResult">
               <div class="info-row">
-                <span class="info-row__label">File Name</span>
+                <span class="info-row__label">{{ t('download_dialog.file_name') }}</span>
                 <span class="info-row__value">{{ linkResult.Name }}</span>
               </div>
               <div class="info-row">
-                <span class="info-row__label">File Size</span>
+                <span class="info-row__label">{{ t('download_dialog.file_size') }}</span>
                 <span class="info-row__value">{{ formatBytes(linkResult.Size) }}</span>
               </div>
               <div class="info-row">
-                <span class="info-row__label">Provider</span>
+                <span class="info-row__label">{{ t('download_dialog.provider') }}</span>
                 <span class="info-row__value">{{ linkResult.Provider }}</span>
               </div>
               <div class="info-row">
-                <span class="info-row__label">Direct Link</span>
+                <span class="info-row__label">{{ t('download_dialog.direct_link') }}</span>
                 <code class="info-row__value truncate">{{ linkResult.DirectLink }}</code>
               </div>
               <div class="info-row">
-                <span class="info-row__label">Proxy</span>
+                <span class="info-row__label">{{ t('download_dialog.proxy') }}</span>
                 <span class="badge" :class="linkResult.IsOpenListProxy ? 'badge--yes' : 'badge--no'">
-                  {{ linkResult.IsOpenListProxy ? 'Yes (via OpenList)' : 'No (Direct)' }}
+                  {{ linkResult.IsOpenListProxy ? t('download_dialog.proxy_yes') : t('download_dialog.proxy_no') }}
                 </span>
               </div>
 
               <!-- Download directory input -->
               <div class="form-field" style="margin-top: 16px;">
-                <label class="info-row__label">Download Directory (optional)</label>
+                <label class="info-row__label">{{ t('download_dialog.download_dir') }}</label>
                 <input
                   v-model="targetDir"
                   class="path-input"
-                  placeholder="Leave empty for default download directory"
+                  :placeholder="t('download_dialog.dir_placeholder')"
                 />
               </div>
 
@@ -147,14 +149,14 @@ function formatBytes(bytes: number): string {
 
               <div v-if="createdTaskId" class="success-row">
                 <span class="success-icon">&#10003;</span>
-                <span>Task created: <code>{{ createdTaskId }}</code></span>
+                <span>{{ t('download_dialog.task_created') }} <code>{{ createdTaskId }}</code></span>
               </div>
             </template>
           </div>
 
           <div class="dialog__footer">
             <button class="btn btn--secondary" @click="handleClose" :disabled="creating">
-              {{ createdTaskId ? 'Close' : 'Cancel' }}
+              {{ createdTaskId ? t('download_dialog.close') : t('download_dialog.cancel') }}
             </button>
             <button
               v-if="linkResult && !createdTaskId"
@@ -162,14 +164,14 @@ function formatBytes(bytes: number): string {
               :disabled="creating || resolving"
               @click="handleConfirm"
             >
-              {{ creating ? 'Submitting...' : 'Submit to aria2' }}
+              {{ creating ? t('download_dialog.submitting') : t('download_dialog.submit') }}
             </button>
             <button
               v-if="createdTaskId"
               class="btn btn--primary"
               @click="handleClose"
             >
-              Done
+              {{ t('download_dialog.done') }}
             </button>
           </div>
         </div>

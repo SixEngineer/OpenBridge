@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getTaskDetail } from '@/api/task'
 import type { DownloadTask } from '@/types/download'
+
+const { t } = useI18n()
 
 const store = useConsoleStore()
 
@@ -23,13 +26,13 @@ async function handleCreate() {
       dir: targetDir.value.trim() || undefined,
     })
     if (res.code !== 1000) {
-      createError.value = (res.msg as string) || 'Create failed'
+      createError.value = (res.msg as string) || t('tasks.create_failed')
     } else {
       sourcePath.value = ''
       targetDir.value = ''
     }
   } catch (e: any) {
-    createError.value = e?.message || 'Request error'
+    createError.value = e?.message || t('common.request_error')
   } finally {
     creating.value = false
   }
@@ -97,22 +100,50 @@ function selectTask(taskId: string) {
 
 // ── Auto refresh ──
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+const refreshCount = ref(0)
+const MAX_REFRESHES = 12 // stop after ~5 minutes of no progress
+const autoRefreshActive = ref(true)
 
 function startAutoRefresh() {
   stopAutoRefresh()
+  refreshCount.value = 0
+  autoRefreshActive.value = true
   refreshTimer = setInterval(() => {
+    refreshCount.value++
+    if (refreshCount.value > MAX_REFRESHES) {
+      stopAutoRefresh()
+      return
+    }
     if (hasActiveTasks.value) {
       fetchAllTasks()
     } else {
       stopAutoRefresh()
     }
-  }, 5000)
+  }, 25000)
 }
 
 function stopAutoRefresh() {
   if (refreshTimer) {
     clearInterval(refreshTimer)
     refreshTimer = null
+  }
+  autoRefreshActive.value = false
+}
+
+function toggleAutoRefresh() {
+  if (refreshTimer) {
+    stopAutoRefresh()
+  } else {
+    startAutoRefresh()
+  }
+}
+
+// Pause refresh when page is hidden
+function onVisibilityChange() {
+  if (document.hidden && refreshTimer) {
+    stopAutoRefresh()
+  } else if (!document.hidden && hasActiveTasks.value) {
+    startAutoRefresh()
   }
 }
 
@@ -125,10 +156,15 @@ async function handleRefresh() {
 onMounted(async () => {
   await fetchAllTasks()
   if (hasActiveTasks.value) startAutoRefresh()
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onUnmounted(() => {
   stopAutoRefresh()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 // ── Utilities ──
@@ -163,24 +199,23 @@ function formatTime(t: string | null | undefined): string {
 <template>
   <section class="page">
     <PageHeader
-      title="Download Tasks"
-      description="Manage all download tasks"
+      :title="t('tasks.title')"
+      :description="t('tasks.description')"
     />
 
-    <!-- Create task (compact) -->
     <section class="panel create-panel">
       <div class="create-form">
         <div class="create-form__field">
           <input
             v-model="sourcePath"
-            placeholder="Source path (e.g. /downloads/file.zip)"
+            :placeholder="t('tasks.source_path_placeholder')"
             @keyup.enter="handleCreate"
           />
         </div>
         <div class="create-form__field">
           <input
             v-model="targetDir"
-            placeholder="Target directory (optional)"
+            :placeholder="t('tasks.target_dir_placeholder')"
             @keyup.enter="handleCreate"
           />
         </div>
@@ -189,7 +224,7 @@ function formatTime(t: string | null | undefined): string {
           :disabled="creating || !sourcePath.trim()"
           @click="handleCreate"
         >
-          {{ creating ? 'Creating...' : 'Create Task' }}
+          {{ creating ? t('tasks.creating') : t('tasks.create_task') }}
         </button>
       </div>
       <div v-if="createError" class="msg msg--error" style="margin-top: 12px;">
@@ -197,7 +232,6 @@ function formatTime(t: string | null | undefined): string {
       </div>
     </section>
 
-    <!-- Toolbar -->
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
@@ -212,22 +246,20 @@ function formatTime(t: string | null | undefined): string {
         </button>
       </div>
       <button class="btn btn--sm" :disabled="listLoading" @click="handleRefresh">
-        {{ listLoading ? 'Refreshing...' : 'Refresh' }}
+        {{ listLoading ? t('tasks.refreshing') : t('tasks.refresh') }}
       </button>
     </div>
 
-    <!-- Loading / Error -->
-    <div v-if="listLoading && tasks.length === 0" class="loading-hint">Loading tasks...</div>
+    <div v-if="listLoading && tasks.length === 0" class="loading-hint">{{ t('tasks.loading') }}</div>
     <div v-if="listError" class="msg msg--error">{{ listError }}</div>
 
-    <!-- Task list -->
     <div v-if="filteredTasks.length > 0" class="task-table">
       <div class="task-table__head">
-        <span>File Name</span>
-        <span>Size</span>
-        <span>Status</span>
-        <span>Progress</span>
-        <span>Created</span>
+        <span>{{ t('tasks.file_name') }}</span>
+        <span>{{ t('tasks.size_col') }}</span>
+        <span>{{ t('tasks.status_col') }}</span>
+        <span>{{ t('tasks.progress_col') }}</span>
+        <span>{{ t('tasks.created_col') }}</span>
       </div>
       <div
         v-for="t in filteredTasks"
@@ -254,54 +286,52 @@ function formatTime(t: string | null | undefined): string {
       </div>
     </div>
 
-    <!-- Empty state -->
     <div v-if="!listLoading && filteredTasks.length === 0 && store.downloadTaskIds.length === 0" class="empty-state">
-      <p>No download tasks yet. Create one above or from the file browser.</p>
+      <p>{{ t('tasks.empty_no_tasks') }}</p>
     </div>
     <div v-else-if="!listLoading && filteredTasks.length === 0" class="empty-state">
-      <p>No tasks match the current filter.</p>
+      <p>{{ t('tasks.empty_no_match') }}</p>
     </div>
 
-    <!-- Active task auto-refresh hint -->
-    <div v-if="hasActiveTasks" class="live-hint">
-      Auto-refreshing active tasks every 5s
+    <div v-if="autoRefreshActive" class="live-hint">
+      {{ t('tasks.auto_refresh') }} ({{ Math.max(MAX_REFRESHES - refreshCount, 0) }} left)
+      <button class="btn-stop-refresh" @click="stopAutoRefresh">Stop</button>
     </div>
 
-    <!-- Task detail expansion -->
     <transition name="slide">
       <div v-if="selectedTask" class="panel detail-panel">
         <div class="detail-panel__header">
-          <h3>Task Details</h3>
-          <button class="btn btn--sm" @click="selectedTaskId = null">Close</button>
+          <h3>{{ t('tasks.task_details') }}</h3>
+          <button class="btn btn--sm" @click="selectedTaskId = null">{{ t('tasks.close') }}</button>
         </div>
         <div class="detail-grid">
           <div class="detail-field">
-            <span class="detail-field__label">Task ID</span>
+            <span class="detail-field__label">{{ t('tasks.task_id') }}</span>
             <span class="mono">{{ selectedTask.TaskID }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Source Path</span>
+            <span class="detail-field__label">{{ t('tasks.source_path') }}</span>
             <span>{{ selectedTask.SourcePath }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">File Name</span>
+            <span class="detail-field__label">{{ t('tasks.file_name_detail') }}</span>
             <span>{{ selectedTask.FileName || '—' }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">File Size</span>
+            <span class="detail-field__label">{{ t('tasks.file_size') }}</span>
             <span>{{ formatBytes(selectedTask.FileSize) }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Aria2 GID</span>
+            <span class="detail-field__label">{{ t('tasks.aria2_gid') }}</span>
             <span v-if="selectedTask.Aria2GID" class="mono">{{ selectedTask.Aria2GID }}</span>
             <span v-else>—</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Status</span>
+            <span class="detail-field__label">{{ t('tasks.status') }}</span>
             <span class="badge" :class="`badge--${selectedTask.Status}`">{{ statusLabel(selectedTask.Status) }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Progress</span>
+            <span class="detail-field__label">{{ t('tasks.progress') }}</span>
             <div class="progress-bar">
               <div
                 class="progress-bar__fill"
@@ -311,31 +341,31 @@ function formatTime(t: string | null | undefined): string {
             </div>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Retry Count</span>
+            <span class="detail-field__label">{{ t('tasks.retry_count') }}</span>
             <span>{{ selectedTask.RetryCount }}</span>
           </div>
           <div class="detail-field" v-if="selectedTask.ErrorMessage">
-            <span class="detail-field__label">Error</span>
+            <span class="detail-field__label">{{ t('tasks.error') }}</span>
             <span class="text--error">{{ selectedTask.ErrorMessage }}</span>
           </div>
           <div class="detail-field" v-if="selectedTask.DirectLink">
-            <span class="detail-field__label">Direct Link</span>
+            <span class="detail-field__label">{{ t('tasks.direct_link') }}</span>
             <span class="truncate">{{ selectedTask.DirectLink }}</span>
           </div>
           <div class="detail-field" v-if="selectedTask.StartedAt">
-            <span class="detail-field__label">Started</span>
+            <span class="detail-field__label">{{ t('tasks.started') }}</span>
             <span>{{ formatTime(selectedTask.StartedAt) }}</span>
           </div>
           <div class="detail-field" v-if="selectedTask.FinishedAt">
-            <span class="detail-field__label">Finished</span>
+            <span class="detail-field__label">{{ t('tasks.finished') }}</span>
             <span>{{ formatTime(selectedTask.FinishedAt) }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Created</span>
+            <span class="detail-field__label">{{ t('tasks.created') }}</span>
             <span>{{ formatTime(selectedTask.CreatedAt) }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">Updated</span>
+            <span class="detail-field__label">{{ t('tasks.updated') }}</span>
             <span>{{ formatTime(selectedTask.UpdatedAt) }}</span>
           </div>
         </div>
@@ -543,6 +573,27 @@ function formatTime(t: string | null | undefined): string {
   font-size: 12px;
   color: #6b7280;
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-stop-refresh {
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+.btn-stop-refresh:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #dc2626;
 }
 
 .msg {

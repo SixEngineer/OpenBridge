@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
 
 const store = useConsoleStore()
+const { t } = useI18n()
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -28,21 +30,21 @@ function saveDownloadDir() {
 
 // OpenList status
 const openListStatus = ref<'active' | 'error' | 'unknown'>('unknown')
-const openListDetail = ref('Checking...')
+const openListDetail = ref(t('settings.checking_status'))
 
 async function checkOpenList() {
   try {
     const res = await getDrivers()
     if (res.code === 1000 || res.code === 0) {
       openListStatus.value = 'active'
-      openListDetail.value = `Connected — ${res.data?.length || 0} driver(s) available`
+      openListDetail.value = t('settings.connected_drivers', { count: res.data?.length || 0 })
     } else {
       openListStatus.value = 'error'
-      openListDetail.value = 'API error'
+      openListDetail.value = t('settings.api_error')
     }
   } catch (e: any) {
     openListStatus.value = 'error'
-    openListDetail.value = 'Not connected (configure in OpenList desktop)'
+    openListDetail.value = t('settings.openlist_disconnected')
   }
 }
 
@@ -54,38 +56,38 @@ onMounted(() => {
 <template>
   <section class="page">
     <PageHeader
-      title="Settings"
-      description="System configuration and connection overview"
+      :title="t('settings.title')"
+      :description="t('settings.description')"
     />
 
     <div class="settings-grid">
       <article class="card">
-        <h3 class="card__title">API Connection</h3>
+        <h3 class="card__title">{{ t('settings.api') }}</h3>
         <div class="card__body">
           <div class="field">
-            <span class="field__label">Base URL</span>
+            <span class="field__label">{{ t('settings.base_url') }}</span>
             <code class="field__value">{{ apiBaseUrl }}</code>
           </div>
           <div class="field">
-            <span class="field__label">Proxy Target</span>
+            <span class="field__label">{{ t('settings.proxy_target') }}</span>
             <code class="field__value">http://localhost:8080</code>
           </div>
           <div class="field">
-            <span class="field__label">Timeout</span>
+            <span class="field__label">{{ t('settings.timeout') }}</span>
             <span class="field__value">10s</span>
           </div>
         </div>
       </article>
 
       <article class="card">
-        <h3 class="card__title">OpenList</h3>
+        <h3 class="card__title">{{ t('settings.openlist') }}</h3>
         <div class="card__body">
           <div class="field">
-            <span class="field__label">Base URL</span>
+            <span class="field__label">{{ t('settings.openlist_url') }}</span>
             <code class="field__value">http://localhost:5244</code>
           </div>
           <div class="field">
-            <span class="field__label">Status</span>
+            <span class="field__label">{{ t('settings.openlist_status') }}</span>
             <span class="field__value">
               <span class="dot" :class="`dot--${openListStatus}`"></span>
               {{ openListDetail }}
@@ -95,44 +97,44 @@ onMounted(() => {
       </article>
 
       <article class="card">
-        <h3 class="card__title">Providers</h3>
+        <h3 class="card__title">{{ t('settings.providers') }}</h3>
         <div class="card__body">
           <div class="field">
-            <span class="field__label">Total Registered</span>
+            <span class="field__label">{{ t('settings.total_registered') }}</span>
             <span class="field__value">{{ providerSummary.total }}</span>
           </div>
           <div class="field" v-if="providerSummary.types.length">
-            <span class="field__label">Types</span>
+            <span class="field__label">{{ t('settings.types') }}</span>
             <span class="field__value">
-              <span v-for="t in providerSummary.types" :key="t" class="tag">{{ t }}</span>
+              <span v-for="typeItem in providerSummary.types" :key="typeItem" class="tag">{{ typeItem }}</span>
             </span>
           </div>
           <div class="field">
-            <span class="field__label">Mounts</span>
-            <span class="field__value">{{ mountSummary.count }} active</span>
+            <span class="field__label">{{ t('settings.mounts') }}</span>
+            <span class="field__value">{{ mountSummary.count }} {{ t('settings.mounts_active') }}</span>
           </div>
         </div>
       </article>
 
       <article class="card">
-        <h3 class="card__title">aria2</h3>
+        <h3 class="card__title">{{ t('settings.aria2') }}</h3>
         <div class="card__body">
           <div class="field">
-            <span class="field__label">RPC URL</span>
+            <span class="field__label">{{ t('settings.rpc_url') }}</span>
             <code class="field__value">http://127.0.0.1:6800/jsonrpc</code>
           </div>
           <div class="field">
-            <span class="field__label">Default Download Directory</span>
+            <span class="field__label">{{ t('settings.download_dir') }}</span>
             <div class="dir-input-row">
               <input
                 v-model="downloadDirInput"
                 class="dir-input"
-                placeholder="e.g. D:\Downloads"
+                :placeholder="t('settings.dir_placeholder')"
                 @keyup.enter="saveDownloadDir"
               />
-              <button class="btn btn--sm" @click="saveDownloadDir" :disabled="!dirChanged">Save</button>
+              <button class="btn btn--sm" @click="saveDownloadDir" :disabled="!dirChanged">{{ t('settings.save') }}</button>
             </div>
-            <span class="field__hint">Leave empty to use aria2's configured default. Changes apply to new downloads.</span>
+            <span class="field__hint">{{ t('settings.dir_hint') }}</span>
           </div>
         </div>
       </article>

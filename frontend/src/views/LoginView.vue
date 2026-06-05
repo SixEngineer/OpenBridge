@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { userLogin } from '@/api/user'
 import { useConsoleStore } from '@/stores/console'
 
 const router = useRouter()
 const store = useConsoleStore()
+const { t } = useI18n()
 
 const username = ref('')
 const password = ref('')
@@ -14,7 +16,7 @@ const errorMsg = ref('')
 
 async function handleLogin() {
   if (!username.value.trim() || !password.value.trim()) {
-    errorMsg.value = 'Please enter username and password'
+    errorMsg.value = t('login.error_empty')
     return
   }
 
@@ -30,10 +32,10 @@ async function handleLogin() {
       store.login(username.value.trim())
       router.push('/dashboard')
     } else {
-      errorMsg.value = (res.msg as string) || 'Login failed'
+      errorMsg.value = (res.msg as string) || t('login.error_failed')
     }
   } catch (e: any) {
-    errorMsg.value = e?.message || 'Request error'
+    errorMsg.value = e?.message || t('common.request_error')
   } finally {
     loading.value = false
   }
@@ -43,21 +45,21 @@ async function handleLogin() {
 <template>
   <section class="login-page">
     <div class="login-card">
-      <p class="login-card__eyebrow">OpenBridge</p>
-      <h1 class="login-card__title">Sign in to the bridge console</h1>
+      <p class="login-card__eyebrow">{{ t('app.name') }}</p>
+      <h1 class="login-card__title">{{ t('login.title') }}</h1>
 
       <form class="login-form" @submit.prevent="handleLogin">
         <label>
-          Username
+          {{ t('login.username') }}
           <input
             v-model="username"
             type="text"
-            placeholder="admin"
+            :placeholder="t('login.username_placeholder')"
             autocomplete="username"
           />
         </label>
         <label>
-          Password
+          {{ t('login.password') }}
           <input
             v-model="password"
             type="password"
@@ -69,7 +71,7 @@ async function handleLogin() {
         <p v-if="errorMsg" class="login-form__error">{{ errorMsg }}</p>
 
         <button type="submit" :disabled="loading">
-          {{ loading ? 'Signing in...' : 'Enter Console' }}
+          {{ loading ? t('login.submitting') : t('login.submit') }}
         </button>
       </form>
     </div>
