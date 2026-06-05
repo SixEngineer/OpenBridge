@@ -80,7 +80,7 @@ func main() {
 	providerUsecase := usecase.NewProviderUseCase(providerRepo, providerRegistry, mountRepo)
 	providerHandler := handler.NewProviderHandler(providerUsecase)
 
-	userUsecase := usecase.NewUserUseCase(&allConfig)
+	userUsecase := usecase.NewUserUseCase(&allConfig, db)
 	userHandler := handler.NewUserHandler(userUsecase)
 
 	storageUsecase := usecase.NewStorageUseCase(&allConfig)
@@ -118,6 +118,7 @@ func main() {
 	userGroup := r.Group("/api/v1/user")
 	{
 		userGroup.POST("/login", userHandler.UserLogin)
+		userGroup.DELETE("/reset", userHandler.Reset)
 	}
 
 	// 注册 Storage 相关路由
