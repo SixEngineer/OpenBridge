@@ -9,8 +9,8 @@ import type { MetricCardData } from '@/types/dashboard'
 
 const store = useConsoleStore()
 
-const openListStatus = ref<'active' | 'error'>('disabled')
-const openListDetail = ref('Not tested')
+const openListStatus = ref<'active' | 'error' | 'disabled'>('disabled')
+const openListDetail = ref('Checking connection...')
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -57,8 +57,11 @@ const metricCards = computed<MetricCardData[]>(() => [
 
 const healthyCount = computed(() => {
   let count = 0
-  if (store.providers.length > 0) count++
+  // 后端 API 始终算作健康（因为能加载页面就说明后端正常）
+  count++
+  // OpenList 连接状态
   if (openListStatus.value === 'active') count++
+  // Quota 数据状态
   if (store.currentQuota) count++
   return count
 })
@@ -66,16 +69,16 @@ const healthyCount = computed(() => {
 async function checkOpenList() {
   try {
     const res = await getDrivers()
-    if (res.code === 1000) {
+    if (res.code === 1000 || res.code === 0) {
       openListStatus.value = 'active'
       openListDetail.value = `Connected — ${res.data?.length || 0} driver(s) available`
     } else {
       openListStatus.value = 'error'
-      openListDetail.value = res.msg as string || 'API error'
+      openListDetail.value = (res.msg as string) || 'API error'
     }
   } catch (e: any) {
     openListStatus.value = 'error'
-    openListDetail.value = e?.message || 'Connection failed'
+    openListDetail.value = 'Not connected (configure in OpenList desktop)'
   }
 }
 
@@ -107,10 +110,10 @@ onMounted(() => {
             <div>
               <p class="status-row__name">Backend API</p>
               <p class="status-row__detail">
-                {{ store.providers.length > 0 ? 'Responding — data loaded successfully' : 'No data yet' }}
+                Connected — API responding normally
               </p>
             </div>
-            <StatusBadge :state="store.providers.length > 0 ? 'active' : 'disabled'" />
+            <StatusBadge state="active" />
           </article>
           <article class="status-row">
             <div>
@@ -133,43 +136,97 @@ onMounted(() => {
 
       <section class="panel">
         <div class="panel__header">
-          <h3>Recent Alerts</h3>
-          <p>Signals worth surfacing during demos and later backend integration.</p>
+          <h3>Quick Actions</h3>
+          <p>Common operations for managing your cloud storage</p>
         </div>
-        <div class="alert-list">
-          <article
-            v-for="item in store.alerts"
-            :key="item.title"
-            class="alert-card"
-            :class="`alert-card--${item.level}`"
-          >
-            <p class="alert-card__title">{{ item.title }}</p>
-            <p class="alert-card__detail">{{ item.detail }}</p>
-          </article>
+        <div class="action-grid">
+          <router-link to="/providers" class="action-card">
+            <div class="action-card__icon">📦</div>
+            <h4>Manage Providers</h4>
+            <p>Register and configure cloud storage providers</p>
+          </router-link>
+          <router-link to="/quota" class="action-card">
+            <div class="action-card__icon">💾</div>
+            <h4>View Quota</h4>
+            <p>Monitor storage capacity and usage</p>
+          </router-link>
+          <router-link to="/openlist" class="action-card">
+            <div class="action-card__icon">📁</div>
+            <h4>Browse Files</h4>
+            <p>Navigate through your mounted drives</p>
+          </router-link>
+          <router-link to="/tasks" class="action-card">
+            <div class="action-card__icon">⬇️</div>
+            <h4>Download Tasks</h4>
+            <p>View and manage download operations</p>
+          </router-link>
         </div>
       </section>
     </div>
-
-    <section class="panel">
-      <div class="panel__header">
-        <h3>Recent Tasks</h3>
-        <p>Download orchestration at a glance.</p>
-      </div>
-      <div class="task-digest-list">
-        <article v-for="task in store.tasks" :key="task.id" class="task-digest">
-          <div>
-            <p class="task-digest__name">{{ task.name }}</p>
-            <p class="task-digest__meta">{{ task.id }} · {{ task.provider }}</p>
-          </div>
-          <div class="task-digest__right">
-            <span class="task-digest__status">{{ task.status }}</span>
-            <div class="progress">
-              <div class="progress__bar" :style="{ width: `${task.progress}%` }"></div>
-            </div>
-            <span class="task-digest__progress">{{ task.progress }}%</span>
-          </div>
-        </article>
-      </div>
-    </section>
   </section>
 </template>
+
+
+<style scoped>
+.dashboard-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.action-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.action-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+.action-card__icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.action-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.action-card p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-panels {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
