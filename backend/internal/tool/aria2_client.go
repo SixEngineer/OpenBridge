@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// aria2c --enable-rpc --rpc-listen-all
+
 type Aria2Client struct {
 	rpcURL string
 	secret string
