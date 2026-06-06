@@ -379,19 +379,19 @@ onMounted(() => {
 
 .quota-provider-card {
   padding: 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fafafa;
+  background: var(--surface);
   cursor: pointer;
   transition: all 0.15s;
 }
 .quota-provider-card:hover {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.06);
 }
 .quota-provider-card--active {
   border-color: #3b82f6;
-  background: #eff6ff;
+  background: rgba(59, 130, 246, 0.08);
   box-shadow: 0 0 0 1px #3b82f6;
 }
 
@@ -405,14 +405,14 @@ onMounted(() => {
 .quota-provider-card__name {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .quota-provider-card__type {
   font-size: 11px;
   padding: 2px 8px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
   border-radius: 8px;
   font-weight: 500;
 }
@@ -432,13 +432,13 @@ onMounted(() => {
 
 .qstat__label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--muted);
 }
 
 .qstat__value {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .qstat__value--available {
@@ -447,7 +447,7 @@ onMounted(() => {
 
 .quota-provider-card__bar {
   height: 6px;
-  background: #e5e7eb;
+  background: var(--border);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -465,7 +465,7 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   transition: all 0.2s;
