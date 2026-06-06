@@ -22,17 +22,13 @@ const router = createRouter({
         { path: 'tasks', component: () => import('@/views/DownloadTasksView.vue') },
         { path: 'quota', component: () => import('@/views/QuotaView.vue') },
         { path: 'settings', component: () => import('@/views/SettingsView.vue') },
-        { path: 'debug', component: () => import('@/views/DebugView.vue'), meta: { admin: true } },
+        { path: 'debug', component: () => import('@/views/DebugView.vue') },
       ],
     },
   ],
 })
 
-router.beforeEach((to) => {
-  if (to.meta.admin) {
-    const stored = localStorage.getItem('openbridge_admin')
-    if (stored !== 'true') return '/dashboard'
-  }
-})
+// Admin guard removed — Debug page is now visible to all users
+// Only the reset-data button inside Debug is gated by store.isAdmin
 
 export default router

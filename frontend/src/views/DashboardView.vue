@@ -5,13 +5,12 @@ import MetricCard from '@/components/common/MetricCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useConsoleStore } from '@/stores/console'
-import { getDrivers } from '@/api/storage'
 import type { MetricCardData } from '@/types/dashboard'
 
 const store = useConsoleStore()
 const { t, locale } = useI18n()
 
-const openListStatus = ref<'active' | 'error' | 'disabled'>('disabled')
+const aria2Status = ref<'active' | 'error' | 'disabled'>('disabled')
 const quotaExpanded = ref(false)
 const quotasByProvider = computed(() =>
   store.providers
@@ -27,7 +26,7 @@ const quotasByProvider = computed(() =>
       }
     })
 )
-const openListDetail = ref(t('dashboard.checking_connection'))
+const aria2Detail = ref(t('dashboard.checking_connection'))
 
 const primaryProviderId = ref<number | null>(null)
 
@@ -86,10 +85,10 @@ const metricCards = computed<MetricCardData[]>(() => [
       : t('dashboard.storage_used_trend_empty'),
   },
   {
-    title: t('dashboard.openlist_status_title'),
-    value: openListStatus.value === 'active' ? t('dashboard.openlist_online') : t('dashboard.openlist_offline'),
-    detail: openListDetail.value,
-    trend: openListStatus.value === 'active' ? t('dashboard.openlist_trend_ok') : t('dashboard.openlist_trend_error'),
+    title: t('dashboard.aria2_status_title'),
+    value: aria2Status.value === 'active' ? t('dashboard.aria2_online') : t('dashboard.aria2_offline'),
+    detail: aria2Detail.value,
+    trend: aria2Status.value === 'active' ? t('dashboard.aria2_trend_ok') : t('dashboard.aria2_trend_error'),
   },
 ])
 
@@ -97,32 +96,42 @@ const healthyCount = computed(() => {
   let count = 0
   // 后端 API 始终算作健康（因为能加载页面就说明后端正常）
   count++
-  // OpenList 连接状态
-  if (openListStatus.value === 'active') count++
+  // aria2 RPC 连接状态
+  if (aria2Status.value === 'active') count++
   // Quota 数据状态
   if (store.currentQuota) count++
   return count
 })
 
-async function checkOpenList() {
+async function checkAria2() {
   try {
-    const res = await getDrivers()
-    if (res.code === 1000 || res.code === 0) {
-      openListStatus.value = 'active'
-      openListDetail.value = t('dashboard.openlist_connected')
+    const res = await fetch('http://127.0.0.1:6800/jsonrpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'ping',
+        method: 'aria2.getVersion',
+        params: [],
+      }),
+    })
+    const data = await res.json()
+    if (data.result) {
+      aria2Status.value = 'active'
+      aria2Detail.value = t('dashboard.aria2_connected', { version: data.result.version || '' })
     } else {
-      openListStatus.value = 'error'
-      openListDetail.value = (res.msg as string) || t('dashboard.api_error')
+      aria2Status.value = 'error'
+      aria2Detail.value = t('dashboard.aria2_error')
     }
   } catch (e: any) {
-    openListStatus.value = 'error'
-    openListDetail.value = t('dashboard.not_connected')
+    aria2Status.value = 'error'
+    aria2Detail.value = t('dashboard.aria2_not_connected')
   }
 }
 
 onMounted(() => {
   store.fetchProviders()
-  checkOpenList()
+  checkAria2()
 })
 </script>
 
@@ -203,10 +212,10 @@ onMounted(() => {
           </article>
           <article class="status-row">
             <div>
-              <p class="status-row__name">{{ t('dashboard.openlist_section') }}</p>
-              <p class="status-row__detail">{{ openListDetail }}</p>
+              <p class="status-row__name">{{ t('dashboard.aria2_section') }}</p>
+              <p class="status-row__detail">{{ aria2Detail }}</p>
             </div>
-            <StatusBadge :state="openListStatus" />
+            <StatusBadge :state="aria2Status" />
           </article>
           <article class="status-row">
             <div>

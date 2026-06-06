@@ -91,7 +91,16 @@
     "browse_files": "Files",
     "browse_files_desc": "Browse mounted cloud drive files",
     "download_tasks": "Tasks",
-    "download_tasks_desc": "Monitor and manage downloads"
+    "download_tasks_desc": "Monitor and manage downloads",
+    "aria2_status_title": "aria2 RPC",
+    "aria2_online": "Online",
+    "aria2_offline": "Offline",
+    "aria2_trend_ok": "Service normal",
+    "aria2_trend_error": "Service unavailable",
+    "aria2_connected": "Connected (v{version})",
+    "aria2_error": "RPC error",
+    "aria2_not_connected": "Not connected",
+    "aria2_section": "aria2"
   },
   "openlist": {
     "title": "OpenList",
@@ -339,7 +348,9 @@
     "no_providers": "No providers registered yet",
     "store_state": "Store State",
     "hide": "Hide",
-    "show": "Show"
+    "show": "Show",
+    "api_info": "API Connection",
+    "api_info_desc": "Backend API connection configuration"
   },
   "token": {
     "title": "Token Manager",

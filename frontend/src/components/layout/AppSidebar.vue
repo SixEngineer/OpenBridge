@@ -2,12 +2,10 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useConsoleStore } from '@/stores/console'
 import type { NavItem } from '@/types/common'
 
 const { t } = useI18n()
 const route = useRoute()
-const store = useConsoleStore()
 
 const allItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', description: 'System overview', i18nKey: 'dashboard', i18nDescKey: 'dashboard_desc' },
@@ -19,9 +17,7 @@ const allItems: NavItem[] = [
   { label: 'Debug', path: '/debug', description: 'Trace and diagnostics', i18nKey: 'debug', i18nDescKey: 'debug_desc' },
 ]
 
-const items = computed(() =>
-  store.isAdmin ? allItems : allItems.filter(item => item.path !== '/debug')
-)
+const items = computed(() => allItems)
 
 const activePath = computed(() => route.path)
 </script>

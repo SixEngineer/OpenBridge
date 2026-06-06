@@ -735,3 +735,58 @@ http://localhost:5173/dashboard
 - 任务列表手动刷新按钮的加载状态细化
 
 ---
+
+## 2026-06-06 Settings/Debug 页面重构与路由权限调整
+
+### 本次完成内容
+
+对 Settings、Dashboard、Debug 三个页面进行了功能重分布，并调整了 Debug 页面的访问权限策略。
+
+- **Settings 页面精简**
+  - 移除只读状态信息（API 连接、OpenList 状态、服务商统计）
+  - 仅保留用户可配置项：aria2 RPC URL（管理员可修改）和默认下载目录
+  - OpenList 基础 URL 字段，仅管理员可修改
+  - 已连接状态用圆点指示器简化显示
+
+- **Dashboard 页面调整**
+  - OpenList 状态卡片替换为 aria2 RPC 连接状态
+  - 系统健康检测增加 aria2 状态检查（通过直接 JSON-RPC 调用 `aria2.getVersion`）
+  - 保留顶部 OpenList 连接状态指示器
+
+- **Debug 页面完善**
+  - 新增 API 连接信息面板（Base URL / Proxy Target / Timeout）
+  - 重置用户数据功能从 Settings 移至 Debug
+  - 重置按钮仅管理员可见
+
+- **权限策略调整**
+  - Debug 页面改为所有用户可见（移除路由 `meta.admin` 守卫和侧边栏过滤）
+  - 只有重置数据按钮受管理员权限控制
+
+- **其他修复**
+  - Provider 表单百度/夸克增加外部链接按钮
+  - 下载任务详情直链增加复制按钮
+  - OpenList 文件浏览器过滤 `provider: "unknown"`
+  - 复选框对齐修复
+
+### 涉及文件
+
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/views/SettingsView.vue`
+- `frontend/src/views/DebugView.vue`
+- `frontend/src/router/index.ts`
+- `frontend/src/components/layout/AppSidebar.vue`
+- `frontend/src/components/provider/ProviderFormDialog.vue`
+- `frontend/src/views/OpenListView.vue`
+- `frontend/src/views/DownloadTasksView.vue`
+- `frontend/src/i18n/locales/zh-CN.json`
+- `frontend/src/i18n/locales/en.json`
+- `docs/frontend_dev.md`
+
+### 当前状态
+
+- Settings 页面功能定位明确：仅展示用户可配置项
+- Dashboard 更加专注系统实时状态（aria2 RPC 取代 OpenList 状态卡）
+- Debug 作为诊断入口，对所有用户可见，破坏性操作受管理员权限保护
+- 管理员模式已从"页面级拦截"改为"操作级控制"
+
+---

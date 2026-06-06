@@ -4,9 +4,12 @@ import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
 import { getProviderList } from '@/api/provider'
+import { userReset } from '@/api/user'
 
 const store = useConsoleStore()
 const { t } = useI18n()
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 // Ping backend
 const pingResult = ref<{ ok: boolean; data?: any; error?: string } | null>(null)
@@ -27,6 +30,28 @@ async function handlePing() {
 
 // Store state visibility
 const showStore = ref(false)
+
+// Reset data
+const resetting = ref(false)
+const confirmReset = ref(false)
+
+async function handleReset() {
+  if (!confirmReset.value) {
+    confirmReset.value = true
+    return
+  }
+  resetting.value = true
+  try {
+    await userReset()
+    store.fetchProviders()
+    confirmReset.value = false
+    alert(t('settings.reset_success'))
+  } catch (e: any) {
+    alert(e.message || t('settings.reset_failed'))
+  } finally {
+    resetting.value = false
+  }
+}
 </script>
 
 <template>
@@ -93,6 +118,43 @@ const showStore = ref(false)
           currentQuota: store.currentQuota,
           quotaLoading: store.quotaLoading,
         }, null, 2) }}</pre>
+      </section>
+
+      <!-- API Connection Info -->
+      <section class="panel">
+        <div class="panel__header">
+          <h3>{{ t('debug.api_info') }}</h3>
+          <p>{{ t('debug.api_info_desc') }}</p>
+        </div>
+        <div class="info-grid">
+          <div class="info-field">
+            <span class="info-field__label">{{ t('settings.base_url') }}</span>
+            <code class="info-field__value">{{ apiBaseUrl }}</code>
+          </div>
+          <div class="info-field">
+            <span class="info-field__label">{{ t('settings.proxy_target') }}</span>
+            <code class="info-field__value">http://localhost:8080</code>
+          </div>
+          <div class="info-field">
+            <span class="info-field__label">{{ t('settings.timeout') }}</span>
+            <span class="info-field__value">10s</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Reset Data -->
+      <section class="panel panel--danger">
+        <div class="panel__header">
+          <h3>{{ t('settings.reset') }}</h3>
+          <p>{{ t('settings.reset_desc') }}</p>
+        </div>
+        <button
+          class="btn btn--danger"
+          :disabled="resetting"
+          @click="handleReset"
+        >
+          {{ confirmReset ? t('settings.reset_confirm') : t('settings.reset_button') }}
+        </button>
       </section>
     </div>
   </section>
@@ -222,6 +284,64 @@ const showStore = ref(false)
   font-size: 14px;
   margin: 0;
 }
+
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.info-field__label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-field__value {
+  font-size: 14px;
+  color: #111827;
+}
+
+code.info-field__value {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.panel--danger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.panel--danger .panel__header h3 {
+  color: #991b1b;
+}
+.panel--danger .panel__header p {
+  color: #991b1b;
+}
+
+.btn--danger {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: #ef4444;
+  color: white;
+  transition: background 0.2s;
+}
+.btn--danger:hover:not(:disabled) { background: #dc2626; }
+.btn--danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .store-dump {
   background: #1f2937;

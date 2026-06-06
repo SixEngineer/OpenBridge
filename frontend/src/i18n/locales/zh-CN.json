@@ -91,7 +91,16 @@
     "browse_files": "文件",
     "browse_files_desc": "浏览挂载的云盘文件",
     "download_tasks": "任务",
-    "download_tasks_desc": "监控和管理下载任务"
+    "download_tasks_desc": "监控和管理下载任务",
+    "aria2_status_title": "aria2 RPC",
+    "aria2_online": "在线",
+    "aria2_offline": "离线",
+    "aria2_trend_ok": "服务正常",
+    "aria2_trend_error": "服务不可用",
+    "aria2_connected": "已连接 (v{version})",
+    "aria2_error": "RPC 错误",
+    "aria2_not_connected": "未连接",
+    "aria2_section": "aria2"
   },
   "openlist": {
     "title": "OpenList",
@@ -339,7 +348,9 @@
     "no_providers": "暂未注册服务商",
     "store_state": "Store 状态",
     "hide": "隐藏",
-    "show": "显示"
+    "show": "显示",
+    "api_info": "API 连接信息",
+    "api_info_desc": "后端 API 连接配置"
   },
   "token": {
     "title": "Token 管理",

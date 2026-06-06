@@ -51,8 +51,6 @@ onMounted(() => {
       <div
         class="status-indicator"
         :class="`status-indicator--${openListStatus}`"
-        :title="store.isAdmin ? '管理员模式已激活' : '双击进入管理员模式'"
-        @dblclick="store.isAdmin ? store.lockAdmin() : store.unlockAdmin()"
       >
         <span class="status-dot"></span>
         <span class="status-text">

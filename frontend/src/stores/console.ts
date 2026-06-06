@@ -107,19 +107,8 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.setItem(DD_KEY, dir)
   }
 
-  // Admin mode — unlocked by double-clicking OpenList status in topbar
-  const ADMIN_KEY = 'openbridge_admin'
-  const isAdmin = ref(localStorage.getItem(ADMIN_KEY) === 'true')
-
-  function unlockAdmin() {
-    isAdmin.value = true
-    localStorage.setItem(ADMIN_KEY, 'true')
-  }
-
-  function lockAdmin() {
-    isAdmin.value = false
-    localStorage.removeItem(ADMIN_KEY)
-  }
+  // All users are admins
+  const isAdmin = ref(true)
 
   // 获取 Provider 列表
   async function fetchProviders() {
@@ -331,8 +320,6 @@ export const useConsoleStore = defineStore('console', () => {
     login,
     logout,
     isAdmin,
-    unlockAdmin,
-    lockAdmin,
     defaultDownloadDir,
     setDefaultDownloadDir,
   }
