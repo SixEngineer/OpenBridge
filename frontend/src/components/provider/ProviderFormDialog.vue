@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ProviderRecord } from '@/types/provider'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -29,29 +32,29 @@ const formData = ref<Partial<ProviderRecord>>({
 const netDiskOptions = [
   {
     value: 'mock',
-    label: 'Generic (Recommended)',
-    desc: 'Routes all operations through the OpenList API. Works with any drive configured in OpenList.'
+    labelKey: 'provider_form.options.generic',
+    descKey: 'provider_form.options.generic_desc',
   },
   {
     value: 'baidu',
-    label: 'Baidu Netdisk (Direct, needs token)',
-    desc: 'Dedicated Baidu backend with direct download support. Requires a Baidu access token.'
+    labelKey: 'provider_form.options.baidu',
+    descKey: 'provider_form.options.baidu_desc',
   },
   {
     value: 'quark',
-    label: 'Quark Netdisk',
-    desc: 'Dedicated Quark backend with quota sync support. Requires a Quark cookie.'
+    labelKey: 'provider_form.options.quark',
+    descKey: 'provider_form.options.quark_desc',
   },
   {
     value: 'local',
-    label: 'Local Storage',
-    desc: 'Reads real disk capacity from the local filesystem. Requires a drive path.'
+    labelKey: 'provider_form.options.local',
+    descKey: 'provider_form.options.local_desc',
   }
 ]
 
 const statusOptions = [
-  { value: 'active', label: 'Active' },
-  { value: 'disabled', label: 'Disabled' }
+  { value: 'active', labelKey: 'provider_form.status_options.active' },
+  { value: 'disabled', labelKey: 'provider_form.status_options.disabled' }
 ]
 
 watch(() => props.provider, (val) => {
@@ -96,100 +99,78 @@ function handleSubmit() {
   <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
     <div class="dialog">
       <div class="dialog__header">
-        <h3>{{ provider ? 'Edit Provider' : 'Register Provider' }}</h3>
+        <h3>{{ provider ? t('provider_form.title_edit') : t('provider_form.title_add') }}</h3>
         <button class="dialog__close" @click="handleClose">&times;</button>
       </div>
 
       <div class="dialog__body">
         <div class="form-group">
-          <label>Name *</label>
-          <input v-model="formData.name" type="text" placeholder="e.g. My Cloud Drive" />
+          <label>{{ t('provider_form.name') }}</label>
+          <input v-model="formData.name" type="text" :placeholder="t('provider_form.name_placeholder')" />
         </div>
 
         <div class="form-group">
-          <label>Backend Type</label>
+          <label>{{ t('provider_form.backend_type') }}</label>
           <select v-model="formData.net_disk">
             <option v-for="opt in netDiskOptions" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
+              {{ t(opt.labelKey) }}
             </option>
           </select>
           <small class="type-hint">
-            {{ netDiskOptions.find(o => o.value === formData.net_disk)?.desc }}
+            {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.descKey || '') }}
           </small>
         </div>
 
         <!-- Local storage path -->
         <div v-if="formData.net_disk === 'local'" class="form-group">
-          <label>Local Folder Path *</label>
-          <input v-model="localPath" type="text" placeholder="C:\" />
-          <small>
-            Uses <code>GetDiskFreeSpaceEx</code> to read the real total, used, and available
-            capacity of the disk containing this path.
-          </small>
+          <label>{{ t('provider_form.local_path') }}</label>
+          <input v-model="localPath" type="text" :placeholder="t('provider_form.local_path_placeholder')" />
+          <small v-html="t('provider_form.local_path_hint')"></small>
         </div>
 
         <!-- Baidu access token -->
         <div v-if="formData.net_disk === 'baidu'" class="form-group">
-          <label>Baidu Access Token *</label>
-          <input v-model="formData.access_token" type="password" placeholder="Paste Baidu access_token" />
-          <small>
-            How to get: Open <code>https://pan.baidu.com</code> → F12 → Network → filter <code>quota</code>,
-            find <code>access_token=xxx</code> in the request URL, copy the <code>xxx</code> part.
-          </small>
+          <label>{{ t('provider_form.baidu_token') }}</label>
+          <input v-model="formData.access_token" type="password" :placeholder="t('provider_form.baidu_token_placeholder')" />
+          <small v-html="t('provider_form.baidu_token_hint')"></small>
         </div>
 
         <!-- Quark cookie -->
         <div v-if="formData.net_disk === 'quark'" class="form-group">
-          <label>Quark Cookie *</label>
-          <input v-model="formData.auth_cookie" type="password" placeholder="Paste Quark cookie string" />
-          <small>
-            How to get: Open <code>https://pan.quark.cn</code> → F12 → Network → click any request →
-            find <code>Cookie</code> in request headers → right-click copy value.
-            The cookie must contain <code>__pus</code> and <code>__t</code> fields.
-          </small>
+          <label>{{ t('provider_form.quark_cookie') }}</label>
+          <input v-model="formData.auth_cookie" type="password" :placeholder="t('provider_form.quark_cookie_placeholder')" />
+          <small v-html="t('provider_form.quark_cookie_hint')"></small>
         </div>
 
         <!-- Account ID (for non-local types) -->
         <div v-if="formData.net_disk !== 'local'" class="form-group">
-          <label>Account ID (optional)</label>
-          <input v-model="formData.account_id" type="text" placeholder="For reference only" />
-          <small>Helps distinguish multiple accounts of the same type. Can be left blank.</small>
+          <label>{{ t('provider_form.account_id') }}</label>
+          <input v-model="formData.account_id" type="text" :placeholder="t('provider_form.account_id_placeholder')" />
+          <small>{{ t('provider_form.account_id_hint') }}</small>
         </div>
 
         <div v-if="provider" class="form-group">
-          <label>Status</label>
+          <label>{{ t('provider_form.status') }}</label>
           <select v-model="formData.status">
             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
+              {{ t(opt.labelKey) }}
             </option>
           </select>
         </div>
 
         <div class="notice">
-          <strong>About Quota</strong>
-          <p v-if="formData.net_disk === 'baidu'">
-            After registration, create a Mount → sync quota. The BaiduProvider will use your access_token
-            to fetch real capacity data from the Baidu API.
-          </p>
-          <p v-else-if="formData.net_disk === 'quark'">
-            After registration, create a Mount → sync quota. The QuarkProvider will use your cookie
-            to fetch real capacity data from the Quark API. Direct download is not supported.
-          </p>
-          <p v-else-if="formData.net_disk === 'local'">
-            After registration, create a Mount → sync quota. The LocalWindowsProvider will read the
-            real disk capacity of the specified path.
-          </p>
-          <p v-else>
-            After registration, create a Mount, then sync quota on the Quota page.
-            Generic mode shows test data.
-          </p>
+          <strong>{{ t('provider_form.about_quota') }}</strong>
+          <p v-if="formData.net_disk === 'baidu'" v-html="t('provider_form.baidu_notice')"></p>
+          <p v-else-if="formData.net_disk === 'quark'" v-html="t('provider_form.quark_notice')"></p>
+          <p v-else-if="formData.net_disk === 'local'" v-html="t('provider_form.local_notice')"></p>
+          <p v-else v-html="t('provider_form.generic_notice')"></p>
         </div>
       </div>
 
       <div class="dialog__footer">
-        <button class="btn btn--secondary" @click="handleClose">Cancel</button>
+        <button class="btn btn--secondary" @click="handleClose">{{ t('provider_form.cancel') }}</button>
         <button class="btn btn--primary" @click="handleSubmit">
-          {{ provider ? 'Save' : 'Register' }}
+          {{ provider ? t('provider_form.save') : t('provider_form.register') }}
         </button>
       </div>
     </div>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import DownloadDialog from '@/components/download/DownloadDialog.vue'
 import { getFiles } from '@/api/storage'
+
+const { t } = useI18n()
 
 const currentPath = ref('/')
 const pathInput = ref('/')
@@ -82,20 +85,20 @@ onMounted(fetchFiles)
 <template>
   <section class="page">
     <PageHeader
-      title="OpenList"
-      description="Browse files from mounted cloud drives"
+      :title="t('openlist.title')"
+      :description="t('openlist.description')"
     />
 
     <section class="panel">
       <div class="panel__header">
-        <h3>File Browser</h3>
+        <h3>{{ t('openlist.file_browser') }}</h3>
         <span v-if="contentProvider" class="provider-tag">{{ contentProvider }}</span>
         <span v-else class="breadcrumb">{{ currentPath }}</span>
       </div>
 
       <div class="browser-controls">
         <div class="path-row">
-          <button class="btn btn--sm" @click="goUp" :disabled="currentPath === '/'">Up</button>
+          <button class="btn btn--sm" @click="goUp" :disabled="currentPath === '/'">{{ t('openlist.up') }}</button>
           <input
             v-model="pathInput"
             class="path-input"
@@ -103,22 +106,22 @@ onMounted(fetchFiles)
             @keyup.enter="fetchFiles"
           />
           <button class="btn btn--primary btn--sm" :disabled="filesLoading" @click="fetchFiles">
-            {{ filesLoading ? 'Loading...' : 'Go' }}
+            {{ filesLoading ? t('openlist.loading') : t('openlist.go') }}
           </button>
-          <button class="btn btn--sm" @click="pathInput = '/'; fetchFiles()">Root</button>
+          <button class="btn btn--sm" @click="pathInput = '/'; fetchFiles()">{{ t('openlist.root') }}</button>
         </div>
       </div>
 
       <div v-if="filesError" class="msg msg--error">{{ filesError }}</div>
 
-      <div v-if="filesLoading" class="loading-hint">Loading files...</div>
+      <div v-if="filesLoading" class="loading-hint">{{ t('openlist.loading') }}</div>
 
       <div v-else-if="files.length > 0" class="file-table">
         <div class="file-table__head">
-          <span>Name</span>
-          <span>Size</span>
-          <span>Modified</span>
-          <span>Action</span>
+          <span>{{ t('openlist.name') }}</span>
+          <span>{{ t('openlist.size') }}</span>
+          <span>{{ t('openlist.modified') }}</span>
+          <span>{{ t('openlist.action') }}</span>
         </div>
         <div
           v-for="f in files"
@@ -139,13 +142,13 @@ onMounted(fetchFiles)
               class="btn-download"
               @click="openDownload(f)"
             >
-              Download
+              {{ t('openlist.download') }}
             </button>
           </span>
         </div>
       </div>
       <p v-else-if="!filesError && !filesLoading" class="empty-hint">
-        No files found at this path. If you have mounted drives in OpenList, they should appear at <code>/</code>.
+        {{ t('openlist.empty') }} <code>/</code>.
       </p>
     </section>
 

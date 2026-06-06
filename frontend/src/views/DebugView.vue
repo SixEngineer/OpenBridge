@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
 import { getProviderList } from '@/api/provider'
 
 const store = useConsoleStore()
+const { t } = useI18n()
 
 // Ping backend
 const pingResult = ref<{ ok: boolean; data?: any; error?: string } | null>(null)
@@ -17,7 +19,7 @@ async function handlePing() {
     const res = await getProviderList()
     pingResult.value = { ok: true, data: res }
   } catch (e: any) {
-    pingResult.value = { ok: false, error: e?.message || 'Request failed' }
+    pingResult.value = { ok: false, error: e?.message || t('common.request_error') }
   } finally {
     pinging.value = false
   }
@@ -30,16 +32,16 @@ const showStore = ref(false)
 <template>
   <section class="page">
     <PageHeader
-      title="Debug"
-      description="Diagnostic tools for development and troubleshooting"
+      :title="t('debug.title')"
+      :description="t('debug.description')"
     />
 
     <div class="debug-grid">
       <!-- Health Check -->
       <section class="panel">
         <div class="panel__header">
-          <h3>Backend Connectivity</h3>
-          <p>Ping the backend API to verify the connection</p>
+          <h3>{{ t('debug.backend_connectivity') }}</h3>
+          <p>{{ t('debug.backend_connectivity_desc') }}</p>
         </div>
         <div class="debug-ping">
           <button
@@ -47,13 +49,13 @@ const showStore = ref(false)
             :disabled="pinging"
             @click="handlePing"
           >
-            {{ pinging ? 'Pinging...' : 'Ping Backend' }}
+            {{ pinging ? t('debug.pinging') : t('debug.ping_backend') }}
           </button>
 
           <div v-if="pingResult" class="ping-result" :class="{ 'ping-result--ok': pingResult.ok, 'ping-result--err': !pingResult.ok }">
-            <p class="ping-result__status">{{ pingResult.ok ? 'Connected' : 'Failed' }}</p>
+            <p class="ping-result__status">{{ pingResult.ok ? t('debug.connected') : t('debug.failed') }}</p>
             <p class="ping-result__detail">
-              {{ pingResult.ok ? `Provider list returned ${pingResult.data?.data?.length || 0} items` : pingResult.error }}
+              {{ pingResult.ok ? t('debug.provider_list_count', { count: pingResult.data?.data?.length || 0 }) : pingResult.error }}
             </p>
           </div>
         </div>
@@ -62,8 +64,8 @@ const showStore = ref(false)
       <!-- Provider Debug -->
       <section class="panel">
         <div class="panel__header">
-          <h3>Provider Registry</h3>
-          <p>{{ store.providers.length }} registered</p>
+          <h3>{{ t('debug.provider_registry') }}</h3>
+          <p>{{ t('debug.registered_count', { count: store.providers.length }) }}</p>
         </div>
         <div class="provider-debug" v-if="store.providers.length > 0">
           <div v-for="p in store.providers" :key="p.id" class="provider-row">
@@ -74,15 +76,15 @@ const showStore = ref(false)
             <span class="tag">{{ p.provider_type }}</span>
           </div>
         </div>
-        <p v-else class="empty-hint">No providers registered</p>
+        <p v-else class="empty-hint">{{ t('debug.no_providers') }}</p>
       </section>
 
       <!-- Store State -->
       <section class="panel">
         <div class="panel__header">
-          <h3>Store State</h3>
+          <h3>{{ t('debug.store_state') }}</h3>
           <button class="btn btn--sm" @click="showStore = !showStore">
-            {{ showStore ? 'Hide' : 'Show' }}
+            {{ showStore ? t('debug.hide') : t('debug.show') }}
           </button>
         </div>
         <pre v-if="showStore" class="store-dump">{{ JSON.stringify({

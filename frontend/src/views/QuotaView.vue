@@ -2,8 +2,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
+import { useI18n } from 'vue-i18n'
 
 const store = useConsoleStore()
+const { t } = useI18n()
 
 // Currently selected Provider ID
 const selectedProviderId = ref<number | null>(null)
@@ -68,9 +70,9 @@ async function handleCreateMount() {
   )
   if (mount) {
     await store.queryQuotaByMount(mount.id)
-    showStatus('Mount created successfully, click Sync Quota to get data')
+    showStatus(t('quota.mount_created'))
   } else {
-    showStatus('Failed to create mount', true)
+    showStatus(t('quota.mount_failed'), true)
   }
 }
 
@@ -79,9 +81,9 @@ async function handleQuery() {
   if (currentMountId.value === null) return
   const res = await store.queryQuotaByMount(currentMountId.value)
   if (res && res.code === 1000) {
-    showStatus('Local cache quota read')
+    showStatus(t('quota.cache_read'))
   } else {
-    showStatus('Query failed: ' + (res?.msg || 'check console'), true)
+    showStatus(t('quota.query_failed') + ' ' + (res?.msg || 'check console'), true)
   }
 }
 
@@ -90,9 +92,9 @@ async function handleSync() {
   if (currentMountId.value === null) return
   const res = await store.syncQuotaByMount(currentMountId.value)
   if (res && res.code === 1000) {
-    showStatus('Quota sync succeeded')
+    showStatus(t('quota.sync_success'))
   } else {
-    showStatus('Sync failed: ' + (res?.msg || 'check console'), true)
+    showStatus(t('quota.sync_failed') + ' ' + (res?.msg || 'check console'), true)
   }
 }
 
@@ -111,8 +113,8 @@ onMounted(() => {
 <template>
   <section class="page">
     <PageHeader
-      title="Quota Management"
-      description="Query and sync drive quota through Mount points"
+      :title="t('quota.title')"
+      :description="t('quota.description')"
     />
 
     <!-- Provider select + actions -->
@@ -121,7 +123,7 @@ onMounted(() => {
         v-model="selectedProviderId"
         class="provider-select"
       >
-        <option value="" disabled>Select a provider</option>
+        <option value="" disabled>{{ t('quota.select_provider') }}</option>
         <option
           v-for="p in store.providers"
           :key="p.id"
@@ -138,7 +140,7 @@ onMounted(() => {
           :disabled="store.mountCreating || (quotaMode === 'virtual' && !virtualTotalMB)"
           @click="handleCreateMount"
         >
-          {{ store.mountCreating ? 'Creating...' : 'Create Mount & Query Quota' }}
+          {{ store.mountCreating ? t('quota.creating_mount') : t('quota.create_mount') }}
         </button>
 
         <template v-else-if="selectedProvider && hasMount">
@@ -147,14 +149,14 @@ onMounted(() => {
             :disabled="store.quotaLoading"
             @click="handleQuery"
           >
-            Query Quota
+            {{ t('quota.query_quota') }}
           </button>
           <button
             class="btn btn--primary"
             :disabled="store.quotaLoading"
             @click="handleSync"
           >
-            {{ store.quotaLoading ? 'Syncing...' : 'Sync Quota' }}
+            {{ store.quotaLoading ? t('quota.syncing') : t('quota.sync_quota') }}
           </button>
         </template>
       </div>
@@ -166,32 +168,32 @@ onMounted(() => {
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="real" />
           <div class="mode-option__body">
-            <span class="mode-option__title">Real</span>
-            <span class="mode-option__desc">Real capacity (from cloud/disk)</span>
+            <span class="mode-option__title">{{ t('quota.real') }}</span>
+            <span class="mode-option__desc">{{ t('quota.real_desc') }}</span>
           </div>
         </label>
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="virtual" />
           <div class="mode-option__body">
-            <span class="mode-option__title">Virtual</span>
-            <span class="mode-option__desc">Virtual capacity (specify total manually)</span>
+            <span class="mode-option__title">{{ t('quota.virtual') }}</span>
+            <span class="mode-option__desc">{{ t('quota.virtual_desc') }}</span>
           </div>
         </label>
-        <label class="mode-option mode-option--disabled" title="Requires an existing Mount as parent, not available yet">
+        <label class="mode-option mode-option--disabled" :title="t('quota.inherit_title')">
           <input type="radio" disabled />
           <div class="mode-option__body">
-            <span class="mode-option__title">Inherit</span>
-            <span class="mode-option__desc">Inherit parent quota (not available)</span>
+            <span class="mode-option__title">{{ t('quota.inherit') }}</span>
+            <span class="mode-option__desc">{{ t('quota.inherit_desc') }}</span>
           </div>
         </label>
       </div>
       <div v-if="quotaMode === 'virtual'" class="virtual-input">
-        <label>Virtual Total Capacity (MB)</label>
+        <label>{{ t('quota.virtual_total') }}</label>
         <input
           v-model="virtualTotalInput"
           type="number"
           min="1"
-          placeholder="e.g. 102400 (100 GB)"
+          :placeholder="t('quota.placeholder_gb')"
           class="virtual-input__field"
         />
       </div>
@@ -207,21 +209,21 @@ onMounted(() => {
       <div class="quota-card__header">
         <h3>{{ store.currentQuota.provider }}</h3>
         <span class="quota-card__time">
-          Updated: {{ new Date(store.currentQuota.updated_at).toLocaleString() }}
+          {{ t('quota.updated') }} {{ new Date(store.currentQuota.updated_at).toLocaleString() }}
         </span>
       </div>
 
       <div class="quota-stats">
         <div class="quota-stat">
-          <span class="quota-stat__label">Total</span>
+          <span class="quota-stat__label">{{ t('quota.total') }}</span>
           <span class="quota-stat__value">{{ formatQuotaMB(store.currentQuota.total) }}</span>
         </div>
         <div class="quota-stat">
-          <span class="quota-stat__label">Used</span>
+          <span class="quota-stat__label">{{ t('quota.used') }}</span>
           <span class="quota-stat__value">{{ formatQuotaMB(store.currentQuota.used) }}</span>
         </div>
         <div class="quota-stat">
-          <span class="quota-stat__label">Available</span>
+          <span class="quota-stat__label">{{ t('quota.available') }}</span>
           <span class="quota-stat__value quota-stat__value--available">
             {{ formatQuotaMB(store.currentQuota.available) }}
           </span>
@@ -237,9 +239,9 @@ onMounted(() => {
     </div>
 
     <div v-else class="empty-state">
-      <p v-if="!selectedProvider">Register a provider on the Providers page first</p>
-      <p v-else-if="!hasMount">Click "Create Mount & Query Quota"</p>
-      <p v-else>No quota data yet. Click "Query Quota" or "Sync Quota"</p>
+      <p v-if="!selectedProvider">{{ t('quota.empty_no_provider') }}</p>
+      <p v-else-if="!hasMount">{{ t('quota.empty_create_mount') }}</p>
+      <p v-else>{{ t('quota.empty_no_data') }}</p>
     </div>
   </section>
 </template>

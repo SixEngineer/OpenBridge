@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const { t } = useI18n()
 const isConnected = ref(true)
 const isLaunching = ref(false)
 
 const buttonLabel = computed(() => {
-  if (!isConnected.value) return 'OpenList offline'
-  if (isLaunching.value) return 'Opening console...'
-  return 'Tap the bridge to enter'
+  if (!isConnected.value) return t('portal.openlist_offline')
+  if (isLaunching.value) return t('portal.opening_console')
+  return t('portal.tap_to_enter')
 })
 
 function enterConsole() {
@@ -34,22 +36,19 @@ function enterConsole() {
     <section class="portal__status-panel">
       <div class="status-chip" :class="{ 'status-chip--offline': !isConnected }">
         <span class="status-chip__dot"></span>
-        {{ isConnected ? 'OpenList Connected' : 'OpenList Disconnected' }}
+        {{ isConnected ? t('portal.openlist_connected') : t('portal.openlist_disconnected') }}
       </div>
     </section>
 
     <section class="hero">
-      <p class="hero__eyebrow">Open storage. Bridge control. Zero-friction entry.</p>
+      <p class="hero__eyebrow">{{ t('portal.eyebrow') }}</p>
 
       <button class="wordmark" type="button" @click="enterConsole">
         <span class="wordmark__open">Open</span>
         <span class="wordmark__bridge">Bridge</span>
       </button>
 
-      <p class="hero__subtitle">
-        A frictionless entry surface for the OpenBridge console. If the OpenList connection is
-        healthy, one tap takes the operator directly into the control center.
-      </p>
+      <p class="hero__subtitle">{{ t('portal.subtitle') }}</p>
 
       <div class="hero__actions">
         <button
@@ -60,7 +59,7 @@ function enterConsole() {
         >
           {{ buttonLabel }}
         </button>
-        <router-link to="/login" class="portal-login-link">Sign in with credentials</router-link>
+        <router-link to="/login" class="portal-login-link">{{ t('portal.sign_in') }}</router-link>
       </div>
     </section>
   </main>

@@ -6,7 +6,9 @@ import ProviderFormDialog from '@/components/provider/ProviderFormDialog.vue'
 import { useConsoleStore } from '@/stores/console'
 import type { ProviderRecord } from '@/types/provider'
 import { registerProvider, updateProvider } from '@/api/provider'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const store = useConsoleStore()
 
 // Dialog state
@@ -46,7 +48,7 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
     }
 
     if (res.code === 1000 || res.code === 0) {
-      alert(editingProvider.value ? 'Updated successfully!' : 'Registered successfully!')
+      alert(editingProvider.value ? t('providers.updated_success') : t('providers.registered_success'))
       dialogVisible.value = false
       editingProvider.value = null
       await store.fetchProviders()
@@ -55,20 +57,20 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
     }
   } catch (error: any) {
     console.error('Operation failed', error)
-    alert('Error: ' + (error?.message || 'Operation failed, please try again'))
+    alert(t('common.error') + ' ' + (error?.message || t('common.operation_failed')))
   }
 }
 
 async function handleDelete(provider: ProviderRecord) {
-  if (!confirm(`Delete "${provider.name}"?`)) {
+  if (!confirm(`${t('providers.delete_confirm')} "${provider.name}"?`)) {
     return
   }
 
   const success = await store.removeProvider(provider.id)
   if (success) {
-    alert('Deleted successfully!')
+    alert(t('providers.delete_success'))
   } else {
-    alert('Delete failed, please try again')
+    alert(t('providers.delete_failed'))
   }
 }
 
@@ -79,16 +81,16 @@ onMounted(() => {
 
 <template>
   <section class="page">
-    <PageHeader title="Providers" description="Cloud drive provider management">
+    <PageHeader :title="t('providers.title')" :description="t('providers.description')">
       <template #actions>
         <button class="btn btn--primary" @click="openAddDialog">
-          + Register Provider
+          {{ t('providers.register_btn') }}
         </button>
       </template>
     </PageHeader>
 
     <div v-if="store.providers.length === 0" class="empty-state">
-      <p>No providers yet. Click the button above to register one.</p>
+      <p>{{ t('providers.empty') }}</p>
     </div>
 
     <div v-else class="provider-grid">
@@ -100,31 +102,31 @@ onMounted(() => {
           </div>
           <div class="provider-card__header-right">
             <StatusBadge :state="provider.status" />
-            <button 
-              class="provider-card__edit" 
+            <button
+              class="provider-card__edit"
               @click="openEditDialog(provider)"
-              title="Edit"
+              :title="t('providers.edit_title')"
             >
               ✏️
             </button>
-            <button 
-              class="provider-card__delete" 
+            <button
+              class="provider-card__delete"
               @click="handleDelete(provider)"
-              title="Delete"
+              :title="t('providers.delete_title')"
             >
               🗑️
             </button>
           </div>
         </div>
-        
-        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? 'Local Path' : 'Account ID' }}</p>
-        <p class="provider-card__text">{{ provider.account_id || 'Not set' }}</p>
-        
-        <p class="provider-card__section-title">Quota Usage</p>
+
+        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? t('providers.local_path') : t('providers.account_id') }}</p>
+        <p class="provider-card__text">{{ provider.account_id || t('providers.not_set') }}</p>
+
+        <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
         <p class="provider-card__text">
-          Total: {{ formatProviderQuota(provider.total_quota) }}<br>
-          Used: {{ formatProviderQuota(provider.used_quota) }}<br>
-          Available: {{ formatProviderQuota(provider.available_quota) }}
+          {{ t('providers.total') }} {{ formatProviderQuota(provider.total_quota) }}<br>
+          {{ t('providers.used') }} {{ formatProviderQuota(provider.used_quota) }}<br>
+          {{ t('providers.available') }} {{ formatProviderQuota(provider.available_quota) }}
         </p>
         
         <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>

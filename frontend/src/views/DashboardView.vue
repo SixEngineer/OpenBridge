@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MetricCard from '@/components/common/MetricCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
@@ -8,9 +9,10 @@ import { getDrivers } from '@/api/storage'
 import type { MetricCardData } from '@/types/dashboard'
 
 const store = useConsoleStore()
+const { t } = useI18n()
 
 const openListStatus = ref<'active' | 'error' | 'disabled'>('disabled')
-const openListDetail = ref('Checking connection...')
+const openListDetail = ref(t('dashboard.checking_connection'))
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -22,36 +24,44 @@ function formatBytes(bytes: number): string {
 
 const metricCards = computed<MetricCardData[]>(() => [
   {
-    title: 'Active Providers',
+    title: t('dashboard.active_providers'),
     value: String(store.providers.length).padStart(2, '0'),
-    detail: 'Adapters currently online',
-    trend: store.providers.length > 0 ? `${store.providers.length} registered` : 'No providers yet',
+    detail: t('dashboard.active_providers_detail'),
+    trend: store.providers.length > 0
+      ? t('dashboard.active_providers_trend_count', { count: store.providers.length })
+      : t('dashboard.active_providers_trend_empty'),
   },
   {
-    title: 'Active Mounts',
+    title: t('dashboard.active_mounts'),
     value: String(Object.keys(store.mountIdByProvider).length).padStart(2, '0'),
-    detail: 'Mount points created',
+    detail: t('dashboard.active_mounts_detail'),
     trend: store.currentQuota
-      ? `Used ${formatBytes(store.currentQuota.used)} / ${formatBytes(store.currentQuota.total)}`
-      : 'No quota data',
+      ? t('dashboard.active_mounts_trend_used', {
+          used: formatBytes(store.currentQuota.used),
+          total: formatBytes(store.currentQuota.total),
+        })
+      : t('dashboard.active_mounts_trend_empty'),
   },
   {
-    title: 'Storage Used',
+    title: t('dashboard.storage_used'),
     value: store.currentQuota
       ? `${((store.currentQuota.used / store.currentQuota.total) * 100).toFixed(1)}%`
       : '—',
     detail: store.currentQuota
-      ? `${formatBytes(store.currentQuota.used)} of ${formatBytes(store.currentQuota.total)}`
-      : 'No storage mounted',
+      ? t('dashboard.storage_used_detail_available', {
+          used: formatBytes(store.currentQuota.used),
+          total: formatBytes(store.currentQuota.total),
+        })
+      : t('dashboard.storage_used_detail_empty'),
     trend: store.currentQuota
-      ? `${formatBytes(store.currentQuota.available)} available`
-      : 'Create a mount first',
+      ? t('dashboard.storage_used_trend_available', { available: formatBytes(store.currentQuota.available) })
+      : t('dashboard.storage_used_trend_empty'),
   },
   {
-    title: 'OpenList Status',
-    value: openListStatus.value === 'active' ? 'Online' : 'Offline',
+    title: t('dashboard.openlist_status_title'),
+    value: openListStatus.value === 'active' ? t('dashboard.openlist_online') : t('dashboard.openlist_offline'),
     detail: openListDetail.value,
-    trend: openListStatus.value === 'active' ? 'API responding' : 'Check OpenList connection',
+    trend: openListStatus.value === 'active' ? t('dashboard.openlist_trend_ok') : t('dashboard.openlist_trend_error'),
   },
 ])
 
@@ -71,14 +81,14 @@ async function checkOpenList() {
     const res = await getDrivers()
     if (res.code === 1000 || res.code === 0) {
       openListStatus.value = 'active'
-      openListDetail.value = `Connected — ${res.data?.length || 0} driver(s) available`
+      openListDetail.value = t('dashboard.connected_drivers', { count: res.data?.length || 0 })
     } else {
       openListStatus.value = 'error'
-      openListDetail.value = (res.msg as string) || 'API error'
+      openListDetail.value = (res.msg as string) || t('dashboard.api_error')
     }
   } catch (e: any) {
     openListStatus.value = 'error'
-    openListDetail.value = 'Not connected (configure in OpenList desktop)'
+    openListDetail.value = t('dashboard.not_connected')
   }
 }
 
@@ -91,8 +101,8 @@ onMounted(() => {
 <template>
   <section class="page">
     <PageHeader
-      title="Dashboard"
-      description="Service health, task flow, and quota pressure across the OpenBridge platform."
+      :title="t('dashboard.title')"
+      :description="t('dashboard.description')"
     />
 
     <div class="grid grid--metrics">
@@ -102,31 +112,31 @@ onMounted(() => {
     <div class="dashboard-panels">
       <section class="panel">
         <div class="panel__header">
-          <h3>System Health</h3>
-          <p>{{ healthyCount }}/3 services healthy</p>
+          <h3>{{ t('dashboard.system_health') }}</h3>
+          <p>{{ t('dashboard.healthy_services', { count: healthyCount }) }}</p>
         </div>
         <div class="status-list">
           <article class="status-row">
             <div>
-              <p class="status-row__name">Backend API</p>
+              <p class="status-row__name">{{ t('dashboard.backend_api') }}</p>
               <p class="status-row__detail">
-                Connected — API responding normally
+                {{ t('dashboard.backend_api_connected') }}
               </p>
             </div>
             <StatusBadge state="active" />
           </article>
           <article class="status-row">
             <div>
-              <p class="status-row__name">OpenList</p>
+              <p class="status-row__name">{{ t('dashboard.openlist_section') }}</p>
               <p class="status-row__detail">{{ openListDetail }}</p>
             </div>
             <StatusBadge :state="openListStatus" />
           </article>
           <article class="status-row">
             <div>
-              <p class="status-row__name">Quota Sync</p>
+              <p class="status-row__name">{{ t('dashboard.quota_sync') }}</p>
               <p class="status-row__detail">
-                {{ store.currentQuota ? 'Last updated: ' + new Date(store.currentQuota.updated_at).toLocaleString() : 'No quota data' }}
+                {{ store.currentQuota ? t('dashboard.last_updated', { time: new Date(store.currentQuota.updated_at).toLocaleString() }) : t('dashboard.no_quota_data') }}
               </p>
             </div>
             <StatusBadge :state="store.currentQuota ? 'active' : 'disabled'" />
@@ -136,29 +146,29 @@ onMounted(() => {
 
       <section class="panel">
         <div class="panel__header">
-          <h3>Quick Actions</h3>
-          <p>Common operations for managing your cloud storage</p>
+          <h3>{{ t('dashboard.quick_actions') }}</h3>
+          <p>{{ t('dashboard.quick_actions_desc') }}</p>
         </div>
         <div class="action-grid">
           <router-link to="/providers" class="action-card">
             <div class="action-card__icon">📦</div>
-            <h4>Manage Providers</h4>
-            <p>Register and configure cloud storage providers</p>
+            <h4>{{ t('dashboard.manage_providers') }}</h4>
+            <p>{{ t('dashboard.manage_providers_desc') }}</p>
           </router-link>
           <router-link to="/quota" class="action-card">
             <div class="action-card__icon">💾</div>
-            <h4>View Quota</h4>
-            <p>Monitor storage capacity and usage</p>
+            <h4>{{ t('dashboard.view_quota') }}</h4>
+            <p>{{ t('dashboard.view_quota_desc') }}</p>
           </router-link>
           <router-link to="/openlist" class="action-card">
             <div class="action-card__icon">📁</div>
-            <h4>Browse Files</h4>
-            <p>Navigate through your mounted drives</p>
+            <h4>{{ t('dashboard.browse_files') }}</h4>
+            <p>{{ t('dashboard.browse_files_desc') }}</p>
           </router-link>
           <router-link to="/tasks" class="action-card">
             <div class="action-card__icon">⬇️</div>
-            <h4>Download Tasks</h4>
-            <p>View and manage download operations</p>
+            <h4>{{ t('dashboard.download_tasks') }}</h4>
+            <p>{{ t('dashboard.download_tasks_desc') }}</p>
           </router-link>
         </div>
       </section>
