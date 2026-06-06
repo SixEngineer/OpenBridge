@@ -57,9 +57,9 @@ func (uc *UserUseCase) Login(username, password string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("login failed with status code: %d", resp.StatusCode)
-	}
+	// if resp.StatusCode != http.StatusOK {
+	// 	return fmt.Errorf("login failed with status code: %d", resp.StatusCode)
+	// }
 
 	// 解析响应体，提取登录结果
 	// {
@@ -78,6 +78,10 @@ func (uc *UserUseCase) Login(username, password string) error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
+	}
+
+	if result.Code != 200 {
+	    return fmt.Errorf("login failed with message: %s", result.Message)
 	}
 
 	// 将登录成功后返回的Token保存到配置中，以便后续请求使用
