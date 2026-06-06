@@ -91,6 +91,8 @@ function saveOlUrl() {
         </div>
       </article>
     </div>
+
+    <p class="version-info">OpenBridge v0.1.0</p>
   </section>
 </template>
 
@@ -102,9 +104,9 @@ function saveOlUrl() {
 }
 
 .card {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   padding: 20px;
 }
 
@@ -112,7 +114,7 @@ function saveOlUrl() {
   margin: 0 0 16px;
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .card__body {
@@ -129,14 +131,14 @@ function saveOlUrl() {
 
 .field__label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .field__hint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .input-row {
@@ -148,11 +150,13 @@ function saveOlUrl() {
 .config-input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
   font-family: 'SFMono-Regular', Consolas, monospace;
   outline: none;
+  background: var(--surface);
+  color: var(--text);
   transition: border-color 0.2s;
 }
 .config-input:focus {
@@ -174,4 +178,11 @@ function saveOlUrl() {
 }
 .btn--sm:hover:not(:disabled) { background: #2563eb; }
 .btn--sm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.version-info {
+  text-align: center;
+  margin: 32px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
 </style>

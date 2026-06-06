@@ -7,6 +7,17 @@ import { useI18n } from 'vue-i18n'
 const store = useConsoleStore()
 const { t, locale } = useI18n()
 
+const backendStatus = ref<'active' | 'error' | 'disabled'>('active')
+
+async function checkBackend() {
+  try {
+    const res = await fetch('/api/v1/provider/list', { method: 'GET' })
+    backendStatus.value = res.ok ? 'active' : 'error'
+  } catch (e: any) {
+    backendStatus.value = 'error'
+  }
+}
+
 // Currently selected Provider ID
 const selectedProviderId = ref<number | null>(null)
 
@@ -129,9 +140,10 @@ watch(selectedProviderId, (id) => {
 })
 
 onMounted(async () => {
+  await checkBackend()
   await store.fetchProviders()
   // Auto-sync once providers are loaded
-  if (selectedProviderId.value !== null) {
+  if (backendStatus.value === 'active' && selectedProviderId.value !== null) {
     const mountId = store.mountIdByProvider[selectedProviderId.value]
     if (mountId) {
       await store.syncQuotaByMount(mountId)
@@ -147,11 +159,17 @@ onMounted(async () => {
       :description="t('quota.description')"
     />
 
+    <!-- Backend offline warning -->
+    <div v-if="backendStatus === 'error'" class="offline-banner">
+      {{ t('dashboard.backend_api_disconnected') }}
+    </div>
+
     <!-- Provider select + actions -->
     <div class="quota-controls">
       <select
         v-model="selectedProviderId"
         class="provider-select"
+        :disabled="backendStatus === 'error'"
       >
         <option value="" disabled>{{ t('quota.select_provider') }}</option>
         <option
@@ -167,7 +185,7 @@ onMounted(async () => {
         <button
           v-if="selectedProvider && !hasMount"
           class="btn btn--primary"
-          :disabled="store.mountCreating || (quotaMode === 'virtual' && !virtualTotalMB) || (quotaMode === 'inherit' && !inheritParentId)"
+          :disabled="store.mountCreating || backendStatus === 'error' || (quotaMode === 'virtual' && !virtualTotalMB) || (quotaMode === 'inherit' && !inheritParentId)"
           @click="handleCreateMount"
         >
           {{ store.mountCreating ? t('quota.creating_mount') : t('quota.create_mount') }}
@@ -176,7 +194,7 @@ onMounted(async () => {
         <template v-else-if="selectedProvider && hasMount">
           <button
             class="btn btn--primary"
-            :disabled="store.quotaLoading"
+            :disabled="store.quotaLoading || backendStatus === 'error'"
             @click="handleSync"
           >
             {{ store.quotaLoading ? t('quota.syncing') : t('quota.sync_quota') }}
@@ -239,8 +257,8 @@ onMounted(async () => {
       <div v-if="statusMessage" class="status-toast" :class="{ 'status-toast--error': statusIsError }">{{ statusMessage }}</div>
     </transition>
 
-    <!-- Quota card -->
-    <div v-if="store.currentQuota" class="quota-card">
+    <!-- Quota card (stale if backend offline) -->
+    <div v-if="store.currentQuota" class="quota-card" :class="{ 'quota-card--stale': backendStatus === 'error' }">
       <div class="quota-card__header">
         <h3>{{ selectedProvider?.name || store.currentQuota.provider }}</h3>
         <div class="quota-card__header-right">
@@ -296,17 +314,19 @@ onMounted(async () => {
   gap: 20px;
   margin-bottom: 30px;
   padding: 20px;
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .provider-select {
   padding: 10px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   min-width: 200px;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .button-group {
@@ -340,20 +360,20 @@ onMounted(async () => {
 }
 
 .btn--secondary {
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn--secondary:hover:not(:disabled) {
-  background: #f9fafb;
+  background: var(--surface-strong);
 }
 
 .quota-card {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   padding: 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .quota-card__header {
@@ -378,7 +398,7 @@ onMounted(async () => {
 
 .quota-card__time {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .mode-badge {
@@ -394,7 +414,7 @@ onMounted(async () => {
 
 .inherit-chain {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
@@ -413,13 +433,13 @@ onMounted(async () => {
 
 .quota-stat__label {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .quota-stat__value {
   font-size: 28px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .quota-stat__value--available {
@@ -428,7 +448,7 @@ onMounted(async () => {
 
 .quota-progress {
   height: 8px;
-  background: #e5e7eb;
+  background: var(--border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -443,19 +463,34 @@ onMounted(async () => {
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
-  background: #f9fafb;
+  color: var(--muted);
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--border);
+}
+
+.offline-banner {
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quota-card--stale {
+  opacity: 0.7;
 }
 
 /* ── Quota mode selection ── */
 .mode-section {
   margin-bottom: 20px;
   padding: 20px;
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .mode-options {
@@ -469,23 +504,24 @@ onMounted(async () => {
   align-items: flex-start;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
+  background: var(--surface);
   transition: all 0.2s;
 }
 .mode-option:has(input:checked) {
   border-color: #3b82f6;
-  background: #eff6ff;
+  background: rgba(59, 130, 246, 0.08);
 }
 .mode-option:hover:not(.mode-option--disabled) {
-  border-color: #9ca3af;
-  background: #f9fafb;
+  border-color: var(--muted);
+  background: var(--surface-strong);
 }
 .mode-option--disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f9fafb;
+  background: var(--surface);
 }
 .mode-option input[type="radio"] {
   margin-top: 3px;
@@ -500,12 +536,12 @@ onMounted(async () => {
 .mode-option__title {
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .mode-option__desc {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .virtual-input {
@@ -518,17 +554,19 @@ onMounted(async () => {
 .virtual-input label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
   white-space: nowrap;
 }
 
 .virtual-input__field {
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   width: 240px;
+  background: var(--surface);
+  color: var(--text);
   transition: border-color 0.2s;
 }
 .virtual-input__field:focus {
@@ -545,16 +583,18 @@ onMounted(async () => {
 .inherit-select label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
   white-space: nowrap;
 }
 .inherit-select__field {
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   width: 240px;
+  background: var(--surface);
+  color: var(--text);
   transition: border-color 0.2s;
 }
 .inherit-select__field:focus {
@@ -565,10 +605,14 @@ onMounted(async () => {
 .mode-hint {
   margin-top: 16px;
   padding: 10px 16px;
-  background: #fef3c7;
+  background: rgba(245, 158, 11, 0.12);
   color: #92400e;
   border-radius: 8px;
   font-size: 13px;
+}
+
+[data-theme="dark"] .mode-hint {
+  color: #fbbf24;
 }
 
 .status-toast {

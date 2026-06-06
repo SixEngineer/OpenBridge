@@ -72,3 +72,12 @@ func (h *DownloadHandler) GetTask(c *gin.Context) {
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: task})
 }
+
+func (h *DownloadHandler) GetAria2Status(c *gin.Context) {
+	version, err := h.downloadUseCase.CheckAria2Status()
+	if err != nil {
+		c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeDownloadGetFailed, Message: err.Error(), Data: nil})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: version})
+}

@@ -862,3 +862,89 @@ http://localhost:5173/dashboard
 - 错误详情弹窗（点击失败任务查看具体错误信息）
 
 ---
+
+## 2026-06-06 暗色模式适配与全局样式统一
+
+### 本次完成内容
+
+对前端所有页面进行了暗色模式（dark mode）适配，将 scoped CSS 中的硬编码颜色替换为 CSS 变量，确保通过 `[data-theme="dark"]` 切换时所有页面自动响应。
+
+- **CSS 变量体系**
+  - 全局 `index.css` 新增 `[data-theme="dark"]` 块，覆盖 `--surface`/`--text`/`--muted`/`--border`/`--accent`/`--gold`/`--shadow` 等核心变量
+  - 暗色主题使用深蓝底色（`#0d1b2a`→`#152238` 渐变）、浅色文字（`#e2e8f0`）、半透明表面（`rgba(26,42,66,0.9)`）
+  - 侧边栏、进度条、登录表单输入框均添加暗色覆盖
+
+- **主题切换机制**
+  - AppTopbar 新增太阳/月亮 SVG 图标切换按钮
+  - 通过 `document.documentElement.dataset.theme` 切换
+  - 偏好持久化到 `localStorage`（key: `openbridge_theme`）
+
+- **页面逐一修复**（以下文件的所有 `background: white`/`color: #111827`/`border: #e5e7eb` 等替换为 `var(--)`）
+
+  | 页面 | 主要改动 |
+  |------|---------|
+  | `AppTopbar.vue` | 顶栏背景/边框、语言切换按钮、主题切换按钮、状态指示器 |
+  | `DashboardView.vue` | 指标卡片、操作卡片、展开面板、按钮、存储用量区域 |
+  | `OpenListView.vue` | 面包屑、文件表格头部/行、排序箭头、加载/空状态提示 |
+  | `ProviderView.vue` | Provider 卡片、编辑/删除按钮悬停态、空状态、Toast |
+  | `ProviderFormDialog.vue` | 弹窗背景/边框、标签、输入框、提示区、按钮 |
+  | `DownloadTasksView.vue` | 标签页、表格/行/头部、详情面板、直链、按钮、空状态 |
+  | `QuotaView.vue` | 控制栏、配额卡片、模式选择、虚拟输入、空状态、离线横幅 |
+  | `SettingsView.vue` | 设置卡片、标签文字、输入框 |
+  | `DebugView.vue` | Ping 结果、Provider 行、API 信息、危险面板 |
+
+- **语义颜色保留**
+  - 蓝色主按钮（`#3b82f6`）、红色危险操作（`#dc2626`）、状态徽章（绿/蓝/黄/红）保持原色
+  - 语义颜色在两种主题下均有意义，不替换
+
+- **后端离线检测完善**（跨页面）
+  - Dashboard/Quota 页新增 `checkBackend()` 健康检查
+  - 通过 `GET /api/v1/provider/list` 确认后端连通性
+  - 离线时禁用操作按钮、标记卡片为陈旧状态、配额同步显示 error
+  - 挂载点展开仅在在线状态可点击
+
+- **aria2 跨机检测修复**
+  - 前端不再直接 fetch aria2 RPC（存在 CORS/地址配置问题）
+  - 后端新增 `GET /api/v1/download/aria2-status`，调用 `aria2.getVersion`
+  - 前端改为请求该后端代理端点
+
+- **其他修复**
+  - Portal 页 `isConnected` 从硬编码 true 改为真实健康检查
+  - 路由守卫改用 `localStorage` 直接读取（解决 Pinia 时序问题）
+  - 右上角"退出登录"改为"重新登录"
+  - Settings 底部增加版本信息 `OpenBridge v0.1.0`
+
+### 涉及文件
+
+- `frontend/src/styles/index.css`
+- `frontend/src/components/layout/AppTopbar.vue`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/views/OpenListView.vue`
+- `frontend/src/views/ProviderView.vue`
+- `frontend/src/components/provider/ProviderFormDialog.vue`
+- `frontend/src/views/DownloadTasksView.vue`
+- `frontend/src/views/QuotaView.vue`
+- `frontend/src/views/SettingsView.vue`
+- `frontend/src/views/DebugView.vue`
+- `frontend/src/views/PortalView.vue`
+- `frontend/src/router/index.ts`
+- `backend/internal/tool/aria2_client.go`
+- `backend/internal/usecase/download_usecase.go`
+- `backend/internal/handler/download_handler.go`
+- `backend/main.go`
+- `docs/frontend_dev.md`
+
+### 当前状态
+
+- 所有页面均支持暗色模式，通过顶栏月亮/太阳图标一键切换
+- 主题偏好自动保存，刷新/重启后保持
+- 后端离线检测覆盖 Dashboard/Quota，aria2 状态跨机可用
+- 语义颜色（按钮、徽章）保持不变，不影响功能理解
+- 设置页面底部新增版本信息
+
+### 后续待做
+
+- 继续跟踪新增页面/组件的暗色模式兼容
+- aria2 重连机制（aria2 重启后自动恢复状态同步）
+- 考虑是否支持"跟随系统主题"选项（`prefers-color-scheme`）
+- 检查第三方组件（如弹窗、通知）的暗色适配

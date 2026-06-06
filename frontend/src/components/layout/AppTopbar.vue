@@ -11,6 +11,15 @@ const { locale, t } = useI18n()
 
 const openListStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
 
+const THEME_KEY = 'openbridge_theme'
+const isDark = ref(localStorage.getItem(THEME_KEY) === 'dark')
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  document.documentElement.dataset.theme = isDark.value ? 'dark' : ''
+  localStorage.setItem(THEME_KEY, isDark.value ? 'dark' : 'light')
+}
+
 function toggleLang() {
   locale.value = locale.value === 'en' ? 'zh-CN' : 'en'
   localStorage.setItem('openbridge_lang', locale.value)
@@ -35,6 +44,9 @@ async function checkOpenList() {
 }
 
 onMounted(() => {
+  if (isDark.value) {
+    document.documentElement.dataset.theme = 'dark'
+  }
   checkOpenList()
   setInterval(checkOpenList, 30000)
 })
@@ -64,6 +76,10 @@ onMounted(() => {
       <button class="lang-switcher" @click="toggleLang" :title="locale === 'en' ? t('topbar.switch_to_cn') : t('topbar.switch_to_en')">
         {{ locale === 'en' ? '中文' : 'EN' }}
       </button>
+      <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色模式' : '切换暗色模式'">
+        <svg v-if="isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
       <router-link v-if="!store.isLoggedIn" to="/login" class="topbar-login-btn">{{ t('topbar.login') }}</router-link>
       <button v-else class="topbar-logout-btn" @click="handleLogout">{{ t('topbar.logout') }}</button>
     </div>
@@ -76,8 +92,8 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar__eyebrow {
@@ -115,21 +131,21 @@ onMounted(() => {
 }
 
 .status-indicator--checking {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #6b7280;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .status-indicator--connected {
-  background: #d1fae5;
-  border-color: #10b981;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #10b981;
 }
 
 .status-indicator--disconnected {
-  background: #fee2e2;
-  border-color: #ef4444;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .status-dot {
@@ -149,7 +165,7 @@ onMounted(() => {
 }
 
 .status-indicator--checking .status-dot {
-  background: #9ca3af;
+  background: var(--muted);
 }
 
 @keyframes pulse {
@@ -161,20 +177,39 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.lang-switcher {
+.lang-switcher,
+.theme-toggle {
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   transition: all 0.2s;
 }
-.lang-switcher:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+.lang-switcher:hover,
+.theme-toggle:hover {
+  background: var(--surface-strong);
+  border-color: var(--muted);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+[data-theme="dark"] .topbar {
+  background: #1a2a42;
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .topbar__eyebrow {
+  color: #5bc0be;
+}
+[data-theme="dark"] .topbar__title {
+  color: #94a3b8;
 }
 
 .topbar-login-btn,

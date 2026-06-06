@@ -88,6 +88,24 @@ func (a *Aria2Client) TellStatus(gid string) (map[string]interface{}, error) {
 	return status, nil
 }
 
+func (a *Aria2Client) GetVersion() (map[string]interface{}, error) {
+	params := []interface{}{}
+	if a.secret != "" {
+		params = append(params, "token:"+a.secret)
+	}
+
+	result, err := a.call("aria2.getVersion", params)
+	if err != nil {
+		return nil, err
+	}
+
+	version, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("aria2 getVersion response invalid")
+	}
+	return version, nil
+}
+
 func (a *Aria2Client) Remove(gid string) (string, error) {
 	params := []interface{}{}
 	if a.secret != "" {

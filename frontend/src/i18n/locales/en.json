@@ -78,6 +78,8 @@
     "healthy_services": "{count} of 3 services healthy",
     "backend_api": "Backend API",
     "backend_api_connected": "Connected and responding",
+    "backend_api_error": "API returned unexpected status",
+    "backend_api_disconnected": "Unable to reach backend service",
     "openlist_section": "OpenList",
     "quota_sync": "Quota Sync",
     "last_updated": "Last updated: {time}",

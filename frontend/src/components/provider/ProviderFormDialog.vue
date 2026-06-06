@@ -191,7 +191,7 @@ function handleSubmit() {
 }
 
 .dialog {
-  background: white;
+  background: var(--surface-strong);
   border-radius: 12px;
   width: 540px;
   max-width: 90vw;
@@ -204,7 +204,7 @@ function handleSubmit() {
 
 .dialog__header {
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -214,6 +214,7 @@ function handleSubmit() {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .dialog__close {
@@ -221,13 +222,13 @@ function handleSubmit() {
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--muted);
   padding: 0;
   line-height: 1;
 }
 
 .dialog__close:hover {
-  color: #374151;
+  color: var(--text);
 }
 
 .dialog__body {
@@ -245,24 +246,26 @@ function handleSubmit() {
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 6px;
-  color: #374151;
+  color: var(--text);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   box-sizing: border-box;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(91, 192, 190, 0.15);
 }
 
 .token-input-row {
@@ -295,11 +298,11 @@ function handleSubmit() {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .form-group code {
-  background: #f3f4f6;
+  background: var(--surface);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 12px;
@@ -310,8 +313,8 @@ function handleSubmit() {
 }
 
 .notice {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px 16px;
   margin-top: 8px;
@@ -319,19 +322,19 @@ function handleSubmit() {
 
 .notice strong {
   font-size: 13px;
-  color: #1e40af;
+  color: var(--accent);
 }
 
 .notice p {
   margin: 8px 0 0;
   font-size: 13px;
-  color: #1e40af;
+  color: var(--accent);
   line-height: 1.5;
 }
 
 .dialog__footer {
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -357,12 +360,12 @@ function handleSubmit() {
 }
 
 .btn--secondary {
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .btn--secondary:hover {
-  background: #f9fafb;
+  background: var(--surface-strong);
 }
 </style>

@@ -136,6 +136,7 @@ func main() {
 		downloadGroup.POST("/resolve", downloadHandler.ResolveDirectLink)
 		downloadGroup.POST("/tasks", downloadHandler.CreateTask)
 		downloadGroup.GET("/tasks/:id", downloadHandler.GetTask)
+		downloadGroup.GET("/aria2-status", downloadHandler.GetAria2Status)
 	}
 
 	if err := r.Run(":" + allConfig.App.Port); err != nil {

@@ -6,6 +6,7 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/views/PortalView.vue'),
+      meta: { public: true },
     },
     {
       path: '/login',
@@ -28,7 +29,14 @@ const router = createRouter({
   ],
 })
 
-// Admin guard removed — Debug page is now visible to all users
-// Only the reset-data button inside Debug is gated by store.isAdmin
+// Auth guard: unauthenticated users are redirected to /login
+const AUTH_KEY = 'openbridge_auth'
+
+router.beforeEach((to) => {
+  if (to.meta.public) return true
+  const storedAuth = localStorage.getItem(AUTH_KEY)
+  if (storedAuth) return true
+  return '/login'
+})
 
 export default router

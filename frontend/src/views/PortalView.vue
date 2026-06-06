@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const { t } = useI18n()
-const isConnected = ref(true)
+const isConnected = ref(false)
 const isLaunching = ref(false)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/v1/provider/list')
+    if (res.ok) {
+      isConnected.value = true
+    }
+  } catch {
+    isConnected.value = false
+  }
+})
 
 const buttonLabel = computed(() => {
   if (!isConnected.value) return t('portal.openlist_offline')

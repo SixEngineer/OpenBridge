@@ -187,17 +187,17 @@ onMounted(() => {
 }
 
 .provider-card {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
   transition: all 0.2s;
 }
 
 .provider-card:hover {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  border-color: #d1d5db;
+  border-color: var(--border);
 }
 
 .provider-card__header {
@@ -226,7 +226,7 @@ onMounted(() => {
 
 .provider-card__edit:hover {
   opacity: 1;
-  background: #e0e7ff;
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .provider-card__delete {
@@ -242,19 +242,19 @@ onMounted(() => {
 
 .provider-card__delete:hover {
   opacity: 1;
-  background: #fee2e2;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .provider-card__name {
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 4px 0;
-  color: #111827;
+  color: var(--text);
 }
 
 .provider-card__id {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -262,7 +262,7 @@ onMounted(() => {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #6b7280;
+  color: var(--muted);
   margin: 16px 0 4px 0;
 }
 
@@ -270,7 +270,7 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
-  color: #374151;
+  color: var(--text);
 }
 
 .provider-card__text--error {
@@ -284,11 +284,11 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 16px;
-  background: #f9fafb;
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--border);
 }
 
 .btn {
@@ -325,14 +325,14 @@ onMounted(() => {
   pointer-events: none;
 }
 .toast--success {
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #a7f3d0;
+  background: rgba(42, 167, 106, 0.15);
+  color: #2aa76a;
+  border: 1px solid rgba(42, 167, 106, 0.3);
 }
 .toast--error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .toast-fade-enter-active { transition: all 0.3s ease; }

@@ -18,6 +18,23 @@
   --shadow: 0 20px 40px rgba(24, 36, 45, 0.08);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at top left, rgba(30, 64, 90, 0.25), transparent 32%),
+    linear-gradient(180deg, #0d1b2a 0%, #152238 100%);
+  color: #e2e8f0;
+  --bg: #0d1b2a;
+  --surface: rgba(26, 42, 66, 0.9);
+  --surface-strong: rgba(32, 52, 80, 0.95);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #5bc0be;
+  --gold: #f0c45a;
+  --shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -66,6 +83,10 @@ input {
   padding: 24px 18px;
   background: linear-gradient(180deg, #143645 0%, #102733 100%);
   color: #eef7f8;
+}
+
+[data-theme="dark"] .sidebar {
+  background: linear-gradient(180deg, #0a1628 0%, #0d1b2a 100%);
 }
 
 .brand {
@@ -167,6 +188,10 @@ input {
   padding: 16px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .sidebar__footer {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar__eyebrow,
@@ -421,6 +446,10 @@ input {
   overflow: hidden;
 }
 
+[data-theme="dark"] .progress {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .progress--large {
   height: 12px;
 }
@@ -537,6 +566,11 @@ input {
   border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.88);
+}
+
+[data-theme="dark"] .login-form input {
+  background: rgba(20, 35, 55, 0.88);
+  color: #e2e8f0;
 }
 
 .login-form button {

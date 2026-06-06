@@ -235,29 +235,29 @@ onMounted(fetchFiles)
   margin-bottom: 12px;
 }
 .msg--error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .panel-path {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .loading-hint {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 14px;
 }
 
 .empty-hint {
-  color: #9ca3af;
+  color: var(--muted);
   font-size: 14px;
   margin: 0;
 }
 .empty-hint code {
-  background: #f3f4f6;
+  background: var(--surface);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 13px;
@@ -268,8 +268,8 @@ onMounted(fetchFiles)
   align-items: center;
   gap: 4px;
   padding: 10px 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 14px;
@@ -278,7 +278,7 @@ onMounted(fetchFiles)
 }
 
 .breadcrumb__link {
-  color: #374151;
+  color: var(--text);
   cursor: pointer;
   font-weight: 500;
   padding: 2px 4px;
@@ -286,11 +286,11 @@ onMounted(fetchFiles)
   transition: background 0.15s;
 }
 .breadcrumb__link:hover {
-  background: #e5e7eb;
+  background: var(--border);
 }
 
 .breadcrumb__sep {
-  color: #9ca3af;
+  color: var(--muted);
   margin: 0 2px;
 }
 
@@ -304,7 +304,7 @@ onMounted(fetchFiles)
 }
 
 .file-table {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -314,13 +314,13 @@ onMounted(fetchFiles)
   grid-template-columns: 1fr 100px 180px 80px;
   gap: 12px;
   padding: 10px 16px;
-  background: #f9fafb;
+  background: var(--surface);
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
 }
 
 .file-row {
@@ -329,13 +329,13 @@ onMounted(fetchFiles)
   gap: 12px;
   padding: 10px 16px;
   font-size: 14px;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s;
 }
-.file-row:hover { background: #f9fafb; }
-.file-row--dir { font-weight: 500; color: #111827; }
+.file-row:hover { background: var(--surface); }
+.file-row--dir { font-weight: 500; color: var(--text); }
 .file-row:last-child { border-bottom: none; }
 
 .file-row__name {
@@ -348,8 +348,8 @@ onMounted(fetchFiles)
 }
 
 .file-icon { font-size: 14px; flex-shrink: 0; }
-.file-row__size { color: #6b7280; font-size: 13px; }
-.file-row__time { color: #6b7280; font-size: 13px; }
+.file-row__size { color: var(--muted); font-size: 13px; }
+.file-row__time { color: var(--muted); font-size: 13px; }
 
 .file-row__action {
   display: flex;
@@ -373,7 +373,7 @@ onMounted(fetchFiles)
   cursor: pointer;
   user-select: none;
 }
-.sortable:hover { color: #374151; }
+.sortable:hover { color: var(--text); }
 
 .sort-arrow {
   font-size: 11px;

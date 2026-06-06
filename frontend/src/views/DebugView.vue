@@ -208,13 +208,13 @@ async function handleReset() {
 }
 
 .ping-result--ok {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.2);
 }
 
 .ping-result--err {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .ping-result__status {
@@ -234,7 +234,7 @@ async function handleReset() {
 .ping-result__detail {
   margin: 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .provider-debug {
@@ -248,8 +248,9 @@ async function handleReset() {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #f9fafb;
+  background: var(--surface);
   border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
 .provider-row__info {
@@ -261,12 +262,12 @@ async function handleReset() {
 .provider-row__name {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--text);
 }
 
 .provider-row__id {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
@@ -280,7 +281,7 @@ async function handleReset() {
 }
 
 .empty-hint {
-  color: #9ca3af;
+  color: var(--muted);
   font-size: 14px;
   margin: 0;
 }
@@ -299,34 +300,35 @@ async function handleReset() {
 
 .info-field__label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .info-field__value {
   font-size: 14px;
-  color: #111827;
+  color: var(--text);
 }
 
 code.info-field__value {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-size: 13px;
-  background: #f3f4f6;
+  background: var(--surface);
   padding: 2px 8px;
   border-radius: 4px;
   width: fit-content;
+  border: 1px solid var(--border);
 }
 
 .panel--danger {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
 }
 .panel--danger .panel__header h3 {
-  color: #991b1b;
+  color: #dc2626;
 }
 .panel--danger .panel__header p {
-  color: #991b1b;
+  color: #dc2626;
 }
 
 .btn--danger {

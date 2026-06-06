@@ -28,6 +28,8 @@ const quotasByProvider = computed(() =>
     })
 )
 const aria2Detail = ref(t('dashboard.checking_connection'))
+const backendStatus = ref<'active' | 'error' | 'disabled'>('active')
+const backendDetail = ref(t('dashboard.backend_api_connected'))
 
 const primaryProviderId = ref<number | null>(null)
 
@@ -90,34 +92,25 @@ const metricCards = computed<MetricCardData[]>(() => [
 
 const healthyCount = computed(() => {
   let count = 0
-  // 后端 API 始终算作健康（因为能加载页面就说明后端正常）
-  count++
+  // 后端 API 健康检查
+  if (backendStatus.value === 'active') count++
   // aria2 RPC 连接状态
   if (aria2Status.value === 'active') count++
-  // Quota 数据状态
-  if (store.currentQuota) count++
+  // Quota 数据状态（后端离线时不计入健康）
+  if (backendStatus.value === 'active' && store.currentQuota) count++
   return count
 })
 
 async function checkAria2() {
   try {
-    const res = await fetch('http://127.0.0.1:6800/jsonrpc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 'ping',
-        method: 'aria2.getVersion',
-        params: [],
-      }),
-    })
+    const res = await fetch('/api/v1/download/aria2-status')
     const data = await res.json()
-    if (data.result) {
+    if (data.code === 1000 && data.data) {
       aria2Status.value = 'active'
-      aria2Detail.value = t('dashboard.aria2_connected', { version: data.result.version || '' })
+      aria2Detail.value = t('dashboard.aria2_connected', { version: data.data.version || '' })
     } else {
       aria2Status.value = 'error'
-      aria2Detail.value = t('dashboard.aria2_error')
+      aria2Detail.value = t('dashboard.aria2_not_connected')
     }
   } catch (e: any) {
     aria2Status.value = 'error'
@@ -125,8 +118,25 @@ async function checkAria2() {
   }
 }
 
+async function checkBackend() {
+  try {
+    const res = await fetch('/api/v1/provider/list', { method: 'GET' })
+    if (res.ok) {
+      backendStatus.value = 'active'
+      backendDetail.value = t('dashboard.backend_api_connected')
+    } else {
+      backendStatus.value = 'error'
+      backendDetail.value = t('dashboard.backend_api_error')
+    }
+  } catch (e: any) {
+    backendStatus.value = 'error'
+    backendDetail.value = t('dashboard.backend_api_disconnected')
+  }
+}
+
 onMounted(() => {
   store.fetchProviders()
+  checkBackend()
   checkAria2()
 })
 </script>
@@ -143,7 +153,7 @@ onMounted(() => {
         v-for="(item, idx) in metricCards"
         :key="item.title"
         :item="item"
-        @click="idx === 1 ? (mountsExpanded = !mountsExpanded, quotaExpanded = false) : idx === 2 && (quotaExpanded = !quotaExpanded, mountsExpanded = false)"
+        @click="idx === 1 && backendStatus === 'active' ? (mountsExpanded = !mountsExpanded, quotaExpanded = false) : idx === 2 && (quotaExpanded = !quotaExpanded, mountsExpanded = false)"
       />
     </div>
 
@@ -227,11 +237,9 @@ onMounted(() => {
           <article class="status-row">
             <div>
               <p class="status-row__name">{{ t('dashboard.backend_api') }}</p>
-              <p class="status-row__detail">
-                {{ t('dashboard.backend_api_connected') }}
-              </p>
+              <p class="status-row__detail">{{ backendDetail }}</p>
             </div>
-            <StatusBadge state="active" />
+            <StatusBadge :state="backendStatus" />
           </article>
           <article class="status-row">
             <div>
@@ -244,10 +252,14 @@ onMounted(() => {
             <div>
               <p class="status-row__name">{{ t('dashboard.quota_sync') }}</p>
               <p class="status-row__detail">
-                {{ store.currentQuota ? t('dashboard.last_updated', { time: new Date(store.currentQuota.updated_at).toLocaleString(locale) }) : t('dashboard.no_quota_data') }}
+                {{ backendStatus !== 'active'
+                  ? t('dashboard.backend_api_disconnected')
+                  : store.currentQuota
+                    ? t('dashboard.last_updated', { time: new Date(store.currentQuota.updated_at).toLocaleString(locale) })
+                    : t('dashboard.no_quota_data') }}
               </p>
             </div>
-            <StatusBadge :state="store.currentQuota ? 'active' : 'disabled'" />
+            <StatusBadge :state="backendStatus !== 'active' ? 'error' : (store.currentQuota ? 'active' : 'disabled')" />
           </article>
         </div>
       </section>
@@ -300,8 +312,8 @@ onMounted(() => {
 }
 
 .action-card {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
   text-decoration: none;
@@ -328,13 +340,13 @@ onMounted(() => {
   margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .action-card p {
   margin: 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--muted);
   line-height: 1.4;
 }
 
@@ -342,9 +354,9 @@ onMounted(() => {
 .quota-expand {
   margin-bottom: 20px;
   padding: 20px;
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .quota-expand__header {
@@ -454,12 +466,12 @@ onMounted(() => {
   font-weight: 500;
   cursor: pointer;
   border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  background: var(--surface);
+  color: var(--text);
   transition: all 0.2s;
   white-space: nowrap;
 }
-.btn--sm:hover { background: #f9fafb; }
+.btn--sm:hover { background: var(--surface-strong); }
 
 .slide-enter-active,
 .slide-leave-active {

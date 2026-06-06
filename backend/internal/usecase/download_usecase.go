@@ -102,6 +102,14 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 	return task, nil
 }
 
+func (u *DownloadUseCase) CheckAria2Status() (map[string]interface{}, error) {
+	version, err := u.aria2Client.GetVersion()
+	if err != nil {
+		return nil, err
+	}
+	return version, nil
+}
+
 func newTaskID() string {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
