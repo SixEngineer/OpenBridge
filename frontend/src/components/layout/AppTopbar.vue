@@ -10,7 +10,6 @@ const store = useConsoleStore()
 const { locale, t } = useI18n()
 
 const openListStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
-const driverCount = ref(0)
 
 function toggleLang() {
   locale.value = locale.value === 'en' ? 'zh-CN' : 'en'
@@ -27,7 +26,6 @@ async function checkOpenList() {
     const res = await getDrivers()
     if (res.code === 1000 || res.code === 0) {
       openListStatus.value = 'connected'
-      driverCount.value = res.data?.length || 0
     } else {
       openListStatus.value = 'disconnected'
     }
@@ -50,12 +48,17 @@ onMounted(() => {
     </div>
 
     <div class="topbar__meta">
-      <div class="status-indicator" :class="`status-indicator--${openListStatus}`">
+      <div
+        class="status-indicator"
+        :class="`status-indicator--${openListStatus}`"
+        :title="store.isAdmin ? '管理员模式已激活' : '双击进入管理员模式'"
+        @dblclick="store.isAdmin ? store.lockAdmin() : store.unlockAdmin()"
+      >
         <span class="status-dot"></span>
         <span class="status-text">
           <template v-if="openListStatus === 'checking'">{{ t('topbar.openlist_checking') }}</template>
           <template v-else-if="openListStatus === 'connected'">
-            {{ t('topbar.openlist_connected', { count: driverCount }) }}
+            {{ t('topbar.openlist_connected') }}
           </template>
           <template v-else>{{ t('topbar.openlist_disconnected') }}</template>
         </span>

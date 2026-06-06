@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getTaskDetail } from '@/api/task'
 import type { DownloadTask } from '@/types/download'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const store = useConsoleStore()
 
@@ -55,8 +55,50 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(t => t.Status === statusFilter.value)
 })
 
+// Sort state
+const sortField = ref<'FileName' | 'FileSize' | 'Status' | 'CreatedAt'>('CreatedAt')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+const sortedTasks = computed(() => {
+  const list = [...filteredTasks.value]
+  const field = sortField.value
+  const order = sortOrder.value
+  list.sort((a, b) => {
+    let va: any = (a as any)[field]
+    let vb: any = (b as any)[field]
+    if (field === 'FileSize') {
+      va = va || 0
+      vb = vb || 0
+      return order === 'asc' ? va - vb : vb - va
+    }
+    if (field === 'CreatedAt') {
+      va = va ? new Date(va).getTime() : 0
+      vb = vb ? new Date(vb).getTime() : 0
+      return order === 'asc' ? va - vb : vb - va
+    }
+    va = (va || '').toString().toLowerCase()
+    vb = (vb || '').toString().toLowerCase()
+    return order === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+  })
+  return list
+})
+
+function toggleSort(field: 'FileName' | 'FileSize' | 'Status' | 'CreatedAt') {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+function sortIndicator(field: string): string {
+  if (sortField.value !== field) return ''
+  return sortOrder.value === 'asc' ? ' ▲' : ' ▼'
+}
+
 // Active statuses (need continuous refresh)
-const activeStatuses = ['pending', 'resolving', 'resolved', 'submitted', 'downloading']
+const activeStatuses = ['submitted', 'downloading']
 
 const hasActiveTasks = computed(() =>
   tasks.value.some(t => activeStatuses.includes(t.Status))
@@ -147,10 +189,67 @@ function onVisibilityChange() {
   }
 }
 
-// Manual refresh
-async function handleRefresh() {
-  await fetchAllTasks()
-  if (hasActiveTasks.value) startAutoRefresh()
+function handleDelete(taskId: string) {
+  tasks.value = tasks.value.filter(t => t.TaskID !== taskId)
+  store.removeTaskId(taskId)
+  const next = new Set(selectedTaskIds.value)
+  next.delete(taskId)
+  selectedTaskIds.value = next
+  if (selectedTaskId.value === taskId) selectedTaskId.value = null
+}
+
+// ── Multi-select ──
+const selectedTaskIds = ref<Set<string>>(new Set())
+
+const isAllSelected = computed(() => {
+  return sortedTasks.value.length > 0 && selectedTaskIds.value.size === sortedTasks.value.length
+})
+
+const hasSelection = computed(() => selectedTaskIds.value.size > 0)
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedTaskIds.value = new Set()
+  } else {
+    selectedTaskIds.value = new Set(sortedTasks.value.map(t => t.TaskID))
+  }
+}
+
+function toggleSelect(taskId: string) {
+  const next = new Set(selectedTaskIds.value)
+  if (next.has(taskId)) {
+    next.delete(taskId)
+  } else {
+    next.add(taskId)
+  }
+  selectedTaskIds.value = next
+}
+
+function clearSelected() {
+  for (const id of selectedTaskIds.value) {
+    tasks.value = tasks.value.filter(t => t.TaskID !== id)
+    store.removeTaskId(id)
+    if (selectedTaskId.value === id) selectedTaskId.value = null
+  }
+  selectedTaskIds.value = new Set()
+}
+
+// Clear selection when filter changes
+watch(statusFilter, () => {
+  selectedTaskIds.value = new Set()
+})
+
+// Clear completed tasks
+function clearCompleted() {
+  const completed = tasks.value.filter(t => t.Status === 'completed')
+  for (const t of completed) {
+    store.removeTaskId(t.TaskID)
+  }
+  tasks.value = tasks.value.filter(t => t.Status !== 'completed')
+  selectedTaskIds.value = new Set()
+  if (selectedTaskId.value && !tasks.value.find(t => t.TaskID === selectedTaskId.value)) {
+    selectedTaskId.value = null
+  }
 }
 
 onMounted(async () => {
@@ -168,6 +267,14 @@ onBeforeUnmount(() => {
 })
 
 // ── Utilities ──
+const copiedLinkId = ref<string | null>(null)
+
+function copyDirectLink(link: string, taskId: string) {
+  navigator.clipboard.writeText(link)
+  copiedLinkId.value = taskId
+  setTimeout(() => { copiedLinkId.value = null }, 1500)
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -177,22 +284,14 @@ function formatBytes(bytes: number): string {
 }
 
 function statusLabel(s: string): string {
-  const map: Record<string, string> = {
-    pending: 'Pending',
-    resolving: 'Resolving',
-    resolved: 'Resolved',
-    submitted: 'Submitted',
-    downloading: 'Downloading',
-    completed: 'Completed',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-  }
-  return map[s] || s
+  const key = s === 'all' ? 'tasks.status_all' : `tasks.status_${s}`
+  const translated = t(key)
+  return translated !== key ? translated : s
 }
 
 function formatTime(t: string | null | undefined): string {
   if (!t) return '—'
-  return new Date(t).toLocaleString()
+  return new Date(t).toLocaleString(locale.value)
 }
 </script>
 
@@ -235,7 +334,7 @@ function formatTime(t: string | null | undefined): string {
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
-          v-for="st in ['all', ...activeStatuses, 'completed', 'failed', 'cancelled']"
+          v-for="st in ['all', ...activeStatuses, 'completed']"
           :key="st"
           class="tab-btn"
           :class="{ 'tab-btn--active': statusFilter === st }"
@@ -245,42 +344,49 @@ function formatTime(t: string | null | undefined): string {
           <span class="tab-count">({{ statusCounts[st] || 0 }})</span>
         </button>
       </div>
-      <button class="btn btn--sm" :disabled="listLoading" @click="handleRefresh">
-        {{ listLoading ? t('tasks.refreshing') : t('tasks.refresh') }}
-      </button>
+<button
+        v-if="statusCounts.completed > 0 || hasSelection"
+        class="btn btn--sm btn--danger"
+        @click="hasSelection ? clearSelected() : clearCompleted()"
+      >{{ hasSelection ? `${t('tasks.clear_selected')} (${selectedTaskIds.size})` : t('tasks.clear_completed') }}</button>
     </div>
 
     <div v-if="listLoading && tasks.length === 0" class="loading-hint">{{ t('tasks.loading') }}</div>
     <div v-if="listError" class="msg msg--error">{{ listError }}</div>
 
-    <div v-if="filteredTasks.length > 0" class="task-table">
+    <div v-if="sortedTasks.length > 0" class="task-table">
       <div class="task-table__head">
-        <span>{{ t('tasks.file_name') }}</span>
-        <span>{{ t('tasks.size_col') }}</span>
-        <span>{{ t('tasks.status_col') }}</span>
-        <span>{{ t('tasks.progress_col') }}</span>
-        <span>{{ t('tasks.created_col') }}</span>
+        <span class="task-table__checkbox">
+          <input type="checkbox" :checked="isAllSelected" @click.stop="toggleSelectAll" />
+        </span>
+        <span class="sortable" @click="toggleSort('FileName')">{{ t('tasks.file_name') }}<span class="sort-arrow">{{ sortIndicator('FileName') }}</span></span>
+        <span class="sortable" @click="toggleSort('FileSize')">{{ t('tasks.size_col') }}<span class="sort-arrow">{{ sortIndicator('FileSize') }}</span></span>
+        <span class="sortable" @click="toggleSort('Status')">{{ t('tasks.status_col') }}<span class="sort-arrow">{{ sortIndicator('Status') }}</span></span>
+        <span class="sortable" @click="toggleSort('CreatedAt')">{{ t('tasks.created_col') }}<span class="sort-arrow">{{ sortIndicator('CreatedAt') }}</span></span>
       </div>
       <div
-        v-for="t in filteredTasks"
+        v-for="t in sortedTasks"
         :key="t.TaskID"
         class="task-row"
         :class="{ 'task-row--selected': selectedTaskId === t.TaskID }"
         @click="selectTask(t.TaskID)"
       >
-        <span class="task-row__name" :title="t.FileName">{{ t.FileName || t.SourcePath }}</span>
+        <span class="task-row__checkbox">
+          <input
+            type="checkbox"
+            :checked="selectedTaskIds.has(t.TaskID)"
+            @click.stop="toggleSelect(t.TaskID)"
+          />
+        </span>
+        <span class="task-row__name" :title="t.FileName">
+          <span class="task-row__name-text">{{ t.FileName || t.SourcePath }}</span>
+          <span class="task-row__delete" @click.stop="handleDelete(t.TaskID)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </span>
+        </span>
         <span class="task-row__size">{{ formatBytes(t.FileSize) }}</span>
         <span>
           <span class="badge" :class="`badge--${t.Status}`">{{ statusLabel(t.Status) }}</span>
-        </span>
-        <span>
-          <div class="progress-mini">
-            <div
-              class="progress-mini__fill"
-              :style="{ width: `${t.Progress}%` }"
-            ></div>
-            <span class="progress-mini__text">{{ t.Progress.toFixed(0) }}%</span>
-          </div>
         </span>
         <span class="task-row__time">{{ formatTime(t.CreatedAt) }}</span>
       </div>
@@ -295,7 +401,7 @@ function formatTime(t: string | null | undefined): string {
 
     <div v-if="autoRefreshActive" class="live-hint">
       {{ t('tasks.auto_refresh') }} ({{ Math.max(MAX_REFRESHES - refreshCount, 0) }} left)
-      <button class="btn-stop-refresh" @click="stopAutoRefresh">Stop</button>
+      <button class="btn-stop-refresh" @click="stopAutoRefresh">{{ t('tasks.stop_refresh') }}</button>
     </div>
 
     <transition name="slide">
@@ -331,16 +437,6 @@ function formatTime(t: string | null | undefined): string {
             <span class="badge" :class="`badge--${selectedTask.Status}`">{{ statusLabel(selectedTask.Status) }}</span>
           </div>
           <div class="detail-field">
-            <span class="detail-field__label">{{ t('tasks.progress') }}</span>
-            <div class="progress-bar">
-              <div
-                class="progress-bar__fill"
-                :style="{ width: `${selectedTask.Progress}%` }"
-              ></div>
-              <span class="progress-bar__text">{{ selectedTask.Progress.toFixed(1) }}%</span>
-            </div>
-          </div>
-          <div class="detail-field">
             <span class="detail-field__label">{{ t('tasks.retry_count') }}</span>
             <span>{{ selectedTask.RetryCount }}</span>
           </div>
@@ -350,7 +446,12 @@ function formatTime(t: string | null | undefined): string {
           </div>
           <div class="detail-field" v-if="selectedTask.DirectLink">
             <span class="detail-field__label">{{ t('tasks.direct_link') }}</span>
-            <span class="truncate">{{ selectedTask.DirectLink }}</span>
+            <div class="direct-link-row">
+              <button class="btn btn--copy" @click.stop="copyDirectLink(selectedTask.DirectLink, selectedTask.TaskID)">
+                {{ copiedLinkId === selectedTask.TaskID ? '已复制!' : t('tasks.copy_link') }}
+              </button>
+              <code class="direct-link-value">{{ selectedTask.DirectLink }}</code>
+            </div>
           </div>
           <div class="detail-field" v-if="selectedTask.StartedAt">
             <span class="detail-field__label">{{ t('tasks.started') }}</span>
@@ -457,6 +558,14 @@ function formatTime(t: string | null | undefined): string {
 }
 .btn--sm:hover:not(:disabled) { background: #f9fafb; }
 .btn--sm:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn--danger {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+.btn--danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
 
 /* ── Task table ── */
 .task-table {
@@ -468,7 +577,7 @@ function formatTime(t: string | null | undefined): string {
 
 .task-table__head {
   display: grid;
-  grid-template-columns: 1fr 90px 110px 120px 160px;
+  grid-template-columns: 36px 1fr 90px 110px 160px;
   gap: 12px;
   padding: 10px 16px;
   background: #f9fafb;
@@ -480,27 +589,73 @@ function formatTime(t: string | null | undefined): string {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.task-table__checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-table__checkbox input[type="checkbox"] {
+  accent-color: #bfdbfe;
+}
+
 .task-row {
   display: grid;
-  grid-template-columns: 1fr 90px 110px 120px 160px;
+  grid-template-columns: 36px 1fr 90px 110px 160px;
   gap: 12px;
   padding: 12px 16px;
   font-size: 14px;
   align-items: center;
   border-bottom: 1px solid #f3f4f6;
-  cursor: pointer;
   transition: background 0.15s;
+}
+
+.task-row__checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.task-row__checkbox input[type="checkbox"] {
+  opacity: 0;
+  transition: opacity 0.15s;
+  accent-color: #bfdbfe;
+}
+.task-row__checkbox input[type="checkbox"]:checked {
+  opacity: 1;
+}
+.task-row:hover .task-row__checkbox input[type="checkbox"] {
+  opacity: 1;
 }
 .task-row:hover { background: #f9fafb; }
 .task-row--selected { background: #eff6ff; }
 .task-row:last-child { border-bottom: none; }
 
 .task-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: #111827;
+  font-weight: 500;
+}
+.task-row__name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #111827;
-  font-weight: 500;
+  flex: 1;
+}
+.task-row__delete {
+  flex-shrink: 0;
+  display: none;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: color 0.15s;
+  line-height: 1;
+}
+.task-row:hover .task-row__delete {
+  display: inline-flex;
+}
+.task-row__delete:hover {
+  color: #dc2626;
 }
 
 .task-row__size {
@@ -511,35 +666,6 @@ function formatTime(t: string | null | undefined): string {
 .task-row__time {
   color: #6b7280;
   font-size: 13px;
-}
-
-/* ── Progress bar (mini) ── */
-.progress-mini {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 18px;
-  background: #e5e7eb;
-  border-radius: 9px;
-  overflow: hidden;
-  position: relative;
-}
-
-.progress-mini__fill {
-  height: 100%;
-  background: #3b82f6;
-  border-radius: 9px;
-  transition: width 0.3s;
-}
-
-.progress-mini__text {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  font-weight: 600;
-  color: #111827;
-  text-shadow: 0 0 4px white;
 }
 
 /* ── Status badges ── */
@@ -640,6 +766,7 @@ function formatTime(t: string | null | undefined): string {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .detail-field__label {
@@ -665,35 +792,45 @@ function formatTime(t: string | null | undefined): string {
   white-space: nowrap;
 }
 
-.text--error { color: #dc2626; }
-
-/* ── Progress bar (large) ── */
-.progress-bar {
+.direct-link-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  height: 20px;
-  background: #e5e7eb;
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
+  min-width: 0;
 }
-.progress-bar__fill {
-  height: 100%;
+.direct-link-value {
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 6px 10px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 13px;
+  color: #374151;
+  scrollbar-width: thin;
+}
+
+.btn--copy {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn--copy:hover {
   background: #3b82f6;
-  border-radius: 10px;
-  transition: width 0.3s;
+  color: white;
+  border-color: #3b82f6;
 }
-.progress-bar__text {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: #111827;
-  text-shadow: 0 0 4px white;
-}
+
+.text--error { color: #dc2626; }
 
 /* ── Slide animation ── */
 .slide-enter-active, .slide-leave-active {
@@ -717,6 +854,17 @@ function formatTime(t: string | null | undefined): string {
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn--primary { background: #3b82f6; color: white; }
 .btn--primary:hover:not(:disabled) { background: #2563eb; }
+
+/* ── Sortable column headers ── */
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable:hover { color: #374151; }
+
+.sort-arrow {
+  font-size: 11px;
+}
 
 /* ── Panel ── */
 .panel {

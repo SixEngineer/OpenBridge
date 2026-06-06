@@ -22,10 +22,17 @@ const router = createRouter({
         { path: 'tasks', component: () => import('@/views/DownloadTasksView.vue') },
         { path: 'quota', component: () => import('@/views/QuotaView.vue') },
         { path: 'settings', component: () => import('@/views/SettingsView.vue') },
-        { path: 'debug', component: () => import('@/views/DebugView.vue') },
+        { path: 'debug', component: () => import('@/views/DebugView.vue'), meta: { admin: true } },
       ],
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (to.meta.admin) {
+    const stored = localStorage.getItem('openbridge_admin')
+    if (stored !== 'true') return '/dashboard'
+  }
 })
 
 export default router

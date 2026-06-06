@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConsoleStore } from '@/stores/console'
 import type { NavItem } from '@/types/common'
 
 const { t } = useI18n()
 const route = useRoute()
+const store = useConsoleStore()
 
-const items: NavItem[] = [
+const allItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', description: 'System overview', i18nKey: 'dashboard', i18nDescKey: 'dashboard_desc' },
   { label: 'OpenList', path: '/openlist', description: 'Bridge source access', i18nKey: 'openlist', i18nDescKey: 'openlist_desc' },
   { label: 'Providers', path: '/providers', description: 'Adapter registry', i18nKey: 'providers', i18nDescKey: 'providers_desc' },
@@ -17,19 +19,23 @@ const items: NavItem[] = [
   { label: 'Debug', path: '/debug', description: 'Trace and diagnostics', i18nKey: 'debug', i18nDescKey: 'debug_desc' },
 ]
 
+const items = computed(() =>
+  store.isAdmin ? allItems : allItems.filter(item => item.path !== '/debug')
+)
+
 const activePath = computed(() => route.path)
 </script>
 
 <template>
   <aside class="sidebar">
     <div>
-      <div class="brand">
+      <router-link to="/" class="brand">
         <span class="brand__mark">OB</span>
         <div>
           <p class="brand__title">{{ t('app.name') }}</p>
           <p class="brand__subtitle">{{ t('app.tagline') }}</p>
         </div>
-      </div>
+      </router-link>
 
       <nav class="nav">
         <RouterLink
@@ -45,9 +51,5 @@ const activePath = computed(() => route.path)
       </nav>
     </div>
 
-    <div class="sidebar__footer">
-      <p class="sidebar__eyebrow">{{ t('sidebar.focus') }}</p>
-      <p class="sidebar__note">{{ t('sidebar.note') }}</p>
-    </div>
   </aside>
 </template>

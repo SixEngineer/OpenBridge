@@ -1,8 +1,4 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-
-const { t } = useI18n()
-
 defineProps<{
   title: string
   description: string
@@ -13,15 +9,14 @@ defineProps<{
   <div class="page-header">
     <div class="page-header__top">
       <div>
-        <p class="page-header__eyebrow">{{ t('page_header.module') }}</p>
         <h2>{{ title }}</h2>
+        <p class="page-header__description">{{ description }}</p>
       </div>
       <!-- Actions slot -->
       <div v-if="$slots.actions" class="page-header__actions">
         <slot name="actions" />
       </div>
     </div>
-    <p class="page-header__description">{{ description }}</p>
   </div>
 </template>
 
@@ -37,14 +32,6 @@ defineProps<{
   width: 100%; 
 }
 
-.page-header__eyebrow {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6b7280;
-  margin: 0 0 4px 0;
-}
-
 .page-header__top h2 {
   margin: 0;
   font-size: 24px;
@@ -57,8 +44,9 @@ defineProps<{
 }
 
 .page-header__description {
-  margin: 8px 0 0 0;
+  margin: 4px 0 0 0;
   color: #6b7280;
   font-size: 14px;
+  word-break: keep-all;
 }
 </style>

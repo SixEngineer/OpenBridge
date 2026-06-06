@@ -533,39 +533,145 @@ http://localhost:5173/dashboard
 
 ---
 
-## 后续追加记录格式建议
-
-后续每次追加日志建议使用如下格式：
-
-```md
-## YYYY-MM-DD 某项开发内容
+## 2026-06-05 前端交互细节优化
 
 ### 本次完成内容
 
--
+对前端多个页面进行了交互细节和 UI 优化，包括复选框多选、排序、配额展示、管理员模式等。
+
+- **下载任务页复选框多选**
+  - 新增列首全选复选框（始终可见，浅蓝色 `accent-color: #bfdbfe`）
+  - 行复选框默认不可见，hover 行时显示
+  - 选中后复选框保持可见
+  - 支持全选/取消全选，切换筛选标签时清空选中
+  - 统一清除按钮：有选中项时显示”清除 (N)”，有已完成任务时显示”清空全部”
+
+- **移除刷新按钮**
+  - 下载任务页移除手动刷新按钮，刷新浏览器即可
+
+- **OpenList 默认排序改为降序**
+  - `sortOrder` 默认值从 `'asc'` 改为 `'desc'`
+
+- **配额管理页简化**
+  - 移除”查询配额”按钮，只保留”同步配额”
+  - 进入页面后自动同步一次配额
+
+- **Provider 表单调整**
+  - 注册按钮与描述文字对齐
+
+- **页面头部调整**
+  - 移除所有页面左上角的”模块”小字
+
+- **登录/退出流程修复**
+  - 退出登录后跳转到 `/login` 而非首页
+  - 修复退出后仍能查看数据的问题
+
+- **管理员模式**
+  - 双击顶部栏 OpenList 状态指示器切换管理员模式
+  - 管理员模式持久化到 localStorage
+  - 侧边栏 Debug 页面仅管理员可见
+  - 路由守卫拦截非管理员访问 `/debug`
+
+- **Mock Provider 配额单位修正**
+  - Mock 类型配额从 MB 改为 GB 展示（Dashboard/Provider/Quota 三个页面）
+  - Mock 数据源数值重新计算（1000 MB → 1024000 GB 等）
+
+- **Dashboard 存储用量卡片交互**
+  - 点击”存储用量”指标卡展开所有 Provider 配额明细
+  - 展开后可点击选择某一个作为默认展示（主指标卡显示选中 Provider 的名称和数据）
+
+- **i18n 翻译修正**
+  - “Provider” 统一翻译为”服务商”
+  - 新增 `tasks.clear_selected` 等翻译键
 
 ### 涉及文件
 
--
+- `frontend/src/views/DownloadTasksView.vue`
+- `frontend/src/views/DashboardView.vue`
+- `frontend/src/views/QuotaView.vue`
+- `frontend/src/views/ProviderView.vue`
+- `frontend/src/views/OpenListView.vue`
+- `frontend/src/components/common/PageHeader.vue`
+- `frontend/src/components/common/MetricCard.vue`
+- `frontend/src/components/layout/AppTopbar.vue`
+- `frontend/src/components/layout/AppSidebar.vue`
+- `frontend/src/stores/console.ts`
+- `frontend/src/router/index.ts`
+- `frontend/src/i18n/locales/zh-CN.json`
+- `frontend/src/i18n/locales/en.json`
+- `frontend/src/mock/provider.ts`
 
 ### 当前状态
 
--
+- 下载任务页支持复选框多选和批量清除
+- Dashboard 存储用量卡片支持展开和选择默认 Provider
+- 管理员模式已实现，可以保护敏感页面
+- Mock 数据配额单位已对齐 MB/GB
+- 页面整体交互流畅度提升
 
 ### 后续待做
 
--
-```
+- 下载页复选框样式微调（对齐、选中态可见性）
 
 ---
 
-## 本文档当前状态
+## 2026-06-06 前端细节修复与 Provider 表单增强
 
-- 已从“方案说明”调整为“开发日志”
-- 当前内容只记录“到目前为止前端做了什么”
-- 后续开发应继续在此文件上追加，不应重写成最终总结
+### 本次完成内容
 
-```
+修复了多项 UI 细节问题，增强 Provider 注册表单的易用性，完善国际化文案。
+
+- **复选框交互修复**
+  - 选中（checked）的复选框保持可见，不依赖 hover 状态
+  - 移除 `padding-top: 2px` 使复选框与文件名文字对齐
+
+- **Settings 页面 OpenList 卡片精简**
+  - 移除状态字段中的驱动数量文字（仍保留连接状态圆点指示器）
+  - 新增 `openlist_connected` 翻译键
+
+- **侧边栏翻译优化**
+  - `openlist_desc`: “网盘源访问” → “文件浏览”
+  - `providers_desc`: “适配器注册” → “服务商管理”
+
+- **Provider 注册表单增强**
+  - 百度网盘：access_token 输入框旁新增”点我获取 Token”按钮，跳转 https://api.oplist.org
+  - 夸克网盘：Cookie 输入框旁新增”点我获取 Cookie”按钮，跳转 https://pan.quark.cn
+  - 百度提示文案改为”通过百度网盘验证登录填写对应的 Key，获取令牌”
+  - 后端类型选项”通用（推荐）”改为”通用”
+
+- **下载任务详情增强**
+  - 直链行新增”点击复制”按钮（复制到剪贴板，短暂显示”已复制!”）
+  - 直链改为横向滚动显示，不再撑破容器
+
+- **OpenList 文件浏览器修复**
+  - 过滤 API 返回的 `provider: “unknown”`，改为显示当前路径
+
+- **国际化同步**
+  - 同步更新 en.json 中对应的翻译文案（Baidu hint、Generic、copy_link、get_cookie 等）
+  - 新增 `tasks.copy_link`、`provider_form.get_token`、`provider_form.get_cookie` 翻译键
+
+### 涉及文件
+
+- `frontend/src/views/DownloadTasksView.vue`
+- `frontend/src/views/OpenListView.vue`
+- `frontend/src/views/SettingsView.vue`
+- `frontend/src/components/provider/ProviderFormDialog.vue`
+- `frontend/src/i18n/locales/zh-CN.json`
+- `frontend/src/i18n/locales/en.json`
+- `docs/frontend_dev.md`
+
+### 当前状态
+
+- Provider 表单对百度网盘和夸克网盘提供了快捷跳转入口，降低用户操作成本
+- 直链复制功能已可用
+- 翻译文案持续优化，中英文同步维护
+- 复选框交互符合预期：未选中的 hover 显示，选中的常驻可见
+
+### 后续待做
+
+- 下载任务详情面板响应式布局优化
+- Provider 表单校验增强（如 token/cookie 非空校验）
+- 下载任务页选中项批量操作功能完善（如批量重新下载）
 
 ## 2026-05-28 前端交互链路完善
 
