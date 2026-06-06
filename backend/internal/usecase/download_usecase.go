@@ -65,7 +65,7 @@ func (u *DownloadUseCase) CreateTask(path string, dir string) (*entity.DownloadT
 		FileName:   directLink.Name,
 		FileSize:   directLink.Size,
 		Aria2GID:   gid,
-		Status:     "submitted",
+		Status:     "active",
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -80,7 +80,24 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 	if strings.TrimSpace(taskID) == "" {
 		return nil, errors.New("task_id empty")
 	}
-	return u.downloadRepo.GetTaskByTaskID(taskID)
+
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+	    return nil, err
+	}
+
+	status, err := u.aria2Client.TellStatus(task.Aria2GID)
+	if err != nil {
+	    return nil, err
+	}
+
+	// fmt.Println(status["status"])
+
+	task.Status = status["status"].(string)
+
+	u.downloadRepo.UpdateTask(task)
+
+	return task, nil
 }
 
 func newTaskID() string {

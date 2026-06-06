@@ -25,3 +25,7 @@ func (repo *DownloadRepository) GetTaskByTaskID(taskID string) (*entity.Download
 	}
 	return &task, nil
 }
+
+func (repo *DownloadRepository) UpdateTask(task *entity.DownloadTask) error {
+	return repo.db.Updates(task).Error
+}
