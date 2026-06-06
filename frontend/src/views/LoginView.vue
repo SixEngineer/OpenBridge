@@ -99,9 +99,9 @@ async function handleLogin() {
 .login-card {
   width: 380px;
   padding: 40px;
-  background: white;
+  background: var(--surface);
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow);
 }
 
 .login-card__eyebrow {
@@ -116,7 +116,7 @@ async function handleLogin() {
 .login-card__title {
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text);
   margin: 0 0 24px;
 }
 
@@ -132,15 +132,17 @@ async function handleLogin() {
   gap: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text);
 }
 
 .login-form input {
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
+  background: var(--surface);
+  color: var(--text);
   transition: border-color 0.2s;
 }
 
@@ -152,9 +154,9 @@ async function handleLogin() {
 .login-form__error {
   margin: 0;
   padding: 10px 14px;
-  background: #fef2f2;
+  background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
   font-size: 13px;
 }
