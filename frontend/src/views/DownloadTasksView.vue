@@ -26,7 +26,7 @@ async function handleCreate() {
       dir: targetDir.value.trim() || undefined,
     })
     if (res.code !== 1000) {
-      createError.value = (res.msg as string) || t('tasks.create_failed')
+      createError.value = translateError((res.msg as string)) || t('tasks.create_failed')
     } else {
       sourcePath.value = ''
       targetDir.value = ''
@@ -52,7 +52,7 @@ const statusFilter = ref<string>('all')
 
 const filteredTasks = computed(() => {
   if (statusFilter.value === 'all') return tasks.value
-  return tasks.value.filter(t => t.Status === statusFilter.value)
+  return tasks.value.filter(t => normalizeStatus(t.Status) === statusFilter.value)
 })
 
 // Sort state
@@ -98,7 +98,7 @@ function sortIndicator(field: string): string {
 }
 
 // Active statuses (need continuous refresh)
-const activeStatuses = ['submitted', 'downloading']
+const activeStatuses = ['waiting', 'active']
 
 const hasActiveTasks = computed(() =>
   tasks.value.some(t => activeStatuses.includes(t.Status))
@@ -108,7 +108,8 @@ const hasActiveTasks = computed(() =>
 const statusCounts = computed(() => {
   const counts: Record<string, number> = { all: tasks.value.length }
   for (const t of tasks.value) {
-    counts[t.Status] = (counts[t.Status] || 0) + 1
+    const norm = normalizeStatus(t.Status)
+    counts[norm] = (counts[norm] || 0) + 1
   }
   return counts
 })
@@ -142,26 +143,18 @@ function selectTask(taskId: string) {
 
 // ── Auto refresh ──
 let refreshTimer: ReturnType<typeof setInterval> | null = null
-const refreshCount = ref(0)
-const MAX_REFRESHES = 12 // stop after ~5 minutes of no progress
 const autoRefreshActive = ref(true)
 
 function startAutoRefresh() {
   stopAutoRefresh()
-  refreshCount.value = 0
   autoRefreshActive.value = true
   refreshTimer = setInterval(() => {
-    refreshCount.value++
-    if (refreshCount.value > MAX_REFRESHES) {
-      stopAutoRefresh()
-      return
-    }
     if (hasActiveTasks.value) {
       fetchAllTasks()
     } else {
       stopAutoRefresh()
     }
-  }, 25000)
+  }, 5000)
 }
 
 function stopAutoRefresh() {
@@ -239,18 +232,24 @@ watch(statusFilter, () => {
   selectedTaskIds.value = new Set()
 })
 
-// Clear completed tasks
-function clearCompleted() {
-  const completed = tasks.value.filter(t => t.Status === 'completed')
-  for (const t of completed) {
+// Clear tasks matching the current filter
+function clearFiltered() {
+  const toRemove = tasks.value.filter(
+    t => (statusFilter.value === 'all' || normalizeStatus(t.Status) === statusFilter.value)
+  )
+  for (const t of toRemove) {
     store.removeTaskId(t.TaskID)
   }
-  tasks.value = tasks.value.filter(t => t.Status !== 'completed')
+  tasks.value = tasks.value.filter(t => !toRemove.find(r => r.TaskID === t.TaskID))
   selectedTaskIds.value = new Set()
   if (selectedTaskId.value && !tasks.value.find(t => t.TaskID === selectedTaskId.value)) {
     selectedTaskId.value = null
   }
 }
+
+const hasFilteredTasks = computed(() =>
+  tasks.value.some(t => statusFilter.value === 'all' || normalizeStatus(t.Status) === statusFilter.value)
+)
 
 onMounted(async () => {
   await fetchAllTasks()
@@ -284,10 +283,42 @@ function formatBytes(bytes: number): string {
 }
 
 function statusLabel(s: string): string {
-  const key = s === 'all' ? 'tasks.status_all' : `tasks.status_${s}`
+  if (s === 'all') return t('tasks.status_all')
+  const mapped = normalizeStatus(s)
+  const key = `tasks.status_${mapped}`
   const translated = t(key)
   return translated !== key ? translated : s
 }
+
+// Map old statuses to new ones for backward compatibility with existing DB data
+function normalizeStatus(s: string): string {
+  const map: Record<string, string> = {
+    submitted: 'waiting',
+    downloading: 'active',
+    failed: 'error',
+    completed: 'complete',
+    cancelled: 'complete',
+  }
+  return map[s] || s
+}
+
+function badgeClass(s: string): string {
+  return `badge--${normalizeStatus(s)}`
+}
+
+// Map common backend error messages to Chinese
+const errorMap: Record<string, string> = {
+  'raw_url empty':   '找不到文件直链',
+  'path empty':      '路径不能为空',
+  'task_id empty':   '任务ID为空',
+}
+function translateError(msg: string): string {
+  return errorMap[msg] || msg
+}
+
+const hasCompletedTasks = computed(() =>
+  tasks.value.some(t => normalizeStatus(t.Status) === 'complete')
+)
 
 function formatTime(t: string | null | undefined): string {
   if (!t) return '—'
@@ -334,7 +365,7 @@ function formatTime(t: string | null | undefined): string {
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
-          v-for="st in ['all', ...activeStatuses, 'completed']"
+          v-for="st in ['all', 'waiting', 'active', 'error', 'complete']"
           :key="st"
           class="tab-btn"
           :class="{ 'tab-btn--active': statusFilter === st }"
@@ -345,10 +376,10 @@ function formatTime(t: string | null | undefined): string {
         </button>
       </div>
 <button
-        v-if="statusCounts.completed > 0 || hasSelection"
+        v-if="hasSelection || hasFilteredTasks"
         class="btn btn--sm btn--danger"
-        @click="hasSelection ? clearSelected() : clearCompleted()"
-      >{{ hasSelection ? `${t('tasks.clear_selected')} (${selectedTaskIds.size})` : t('tasks.clear_completed') }}</button>
+        @click="hasSelection ? clearSelected() : clearFiltered()"
+      >{{ hasSelection ? `${t('tasks.clear_selected')} (${selectedTaskIds.size})` : t('tasks.clear_filtered') }}</button>
     </div>
 
     <div v-if="listLoading && tasks.length === 0" class="loading-hint">{{ t('tasks.loading') }}</div>
@@ -362,7 +393,7 @@ function formatTime(t: string | null | undefined): string {
         <span class="sortable" @click="toggleSort('FileName')">{{ t('tasks.file_name') }}<span class="sort-arrow">{{ sortIndicator('FileName') }}</span></span>
         <span class="sortable" @click="toggleSort('FileSize')">{{ t('tasks.size_col') }}<span class="sort-arrow">{{ sortIndicator('FileSize') }}</span></span>
         <span class="sortable" @click="toggleSort('Status')">{{ t('tasks.status_col') }}<span class="sort-arrow">{{ sortIndicator('Status') }}</span></span>
-        <span class="sortable" @click="toggleSort('CreatedAt')">{{ t('tasks.created_col') }}<span class="sort-arrow">{{ sortIndicator('CreatedAt') }}</span></span>
+        <span class="sortable" @click="toggleSort('CreatedAt')">{{ statusFilter === 'complete' ? t('tasks.finished_col') : t('tasks.created_col') }}<span class="sort-arrow">{{ sortIndicator('CreatedAt') }}</span></span>
       </div>
       <div
         v-for="t in sortedTasks"
@@ -385,10 +416,10 @@ function formatTime(t: string | null | undefined): string {
           </span>
         </span>
         <span class="task-row__size">{{ formatBytes(t.FileSize) }}</span>
-        <span>
-          <span class="badge" :class="`badge--${t.Status}`">{{ statusLabel(t.Status) }}</span>
+        <span class="task-row__status">
+          <span class="badge" :class="badgeClass(t.Status)">{{ statusLabel(t.Status) }}</span>
         </span>
-        <span class="task-row__time">{{ formatTime(t.CreatedAt) }}</span>
+        <span class="task-row__time">{{ formatTime(statusFilter === 'complete' ? t.FinishedAt : t.CreatedAt) }}</span>
       </div>
     </div>
 
@@ -400,7 +431,7 @@ function formatTime(t: string | null | undefined): string {
     </div>
 
     <div v-if="autoRefreshActive" class="live-hint">
-      {{ t('tasks.auto_refresh') }} ({{ Math.max(MAX_REFRESHES - refreshCount, 0) }} left)
+      {{ t('tasks.auto_refresh') }}
       <button class="btn-stop-refresh" @click="stopAutoRefresh">{{ t('tasks.stop_refresh') }}</button>
     </div>
 
@@ -434,7 +465,7 @@ function formatTime(t: string | null | undefined): string {
           </div>
           <div class="detail-field">
             <span class="detail-field__label">{{ t('tasks.status') }}</span>
-            <span class="badge" :class="`badge--${selectedTask.Status}`">{{ statusLabel(selectedTask.Status) }}</span>
+            <span class="badge" :class="badgeClass(selectedTask.Status)">{{ statusLabel(selectedTask.Status) }}</span>
           </div>
           <div class="detail-field">
             <span class="detail-field__label">{{ t('tasks.retry_count') }}</span>
@@ -663,6 +694,11 @@ function formatTime(t: string | null | undefined): string {
   font-size: 13px;
 }
 
+.task-row__status {
+  display: flex;
+  align-items: center;
+}
+
 .task-row__time {
   color: #6b7280;
   font-size: 13px;
@@ -677,14 +713,10 @@ function formatTime(t: string | null | undefined): string {
   font-weight: 600;
   text-transform: capitalize;
 }
-.badge--pending,
-.badge--submitted { background: #fef3c7; color: #92400e; }
-.badge--resolving { background: #dbeafe; color: #1e40af; }
-.badge--resolved,
-.badge--downloading { background: #d1fae5; color: #065f46; }
-.badge--completed { background: #10b981; color: white; }
-.badge--failed { background: #fef2f2; color: #dc2626; }
-.badge--cancelled { background: #f3f4f6; color: #6b7280; }
+.badge--waiting { background: #fef3c7; color: #92400e; }
+.badge--active { background: #dbeafe; color: #1e40af; }
+.badge--complete { background: #10b981; color: white; }
+.badge--error { background: #fef2f2; color: #dc2626; }
 
 /* ── Hints ── */
 .loading-hint {

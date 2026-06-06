@@ -12,6 +12,7 @@ const { t, locale } = useI18n()
 
 const aria2Status = ref<'active' | 'error' | 'disabled'>('disabled')
 const quotaExpanded = ref(false)
+const mountsExpanded = ref(false)
 const quotasByProvider = computed(() =>
   store.providers
     .filter(p => p.total_quota > 0)
@@ -63,12 +64,7 @@ const metricCards = computed<MetricCardData[]>(() => [
     title: t('dashboard.active_mounts'),
     value: String(Object.keys(store.mountIdByProvider).length).padStart(2, '0'),
     detail: t('dashboard.active_mounts_detail'),
-    trend: store.currentQuota
-      ? t('dashboard.active_mounts_trend_used', {
-          used: formatBytes(store.currentQuota.used),
-          total: formatBytes(store.currentQuota.total),
-        })
-      : t('dashboard.active_mounts_trend_empty'),
+    trend: '',
   },
   {
     title: primaryProvider.value
@@ -147,7 +143,7 @@ onMounted(() => {
         v-for="(item, idx) in metricCards"
         :key="item.title"
         :item="item"
-        @click="idx === 2 && (quotaExpanded = !quotaExpanded)"
+        @click="idx === 1 ? (mountsExpanded = !mountsExpanded, quotaExpanded = false) : idx === 2 && (quotaExpanded = !quotaExpanded, mountsExpanded = false)"
       />
     </div>
 
@@ -194,6 +190,33 @@ onMounted(() => {
       </div>
     </transition>
 
+    <!-- Expanded mount list -->
+    <transition name="slide">
+      <div v-if="mountsExpanded && store.mounts.length > 0" class="quota-expand">
+        <div class="quota-expand__header">
+          <h4>{{ t('dashboard.active_mounts') }}</h4>
+        </div>
+        <div class="quota-grid">
+          <div
+            v-for="m in store.mounts"
+            :key="m.id"
+            class="quota-provider-card"
+          >
+            <div class="quota-provider-card__top">
+              <span class="quota-provider-card__name">{{ m.name }}</span>
+              <span class="quota-provider-card__type">{{ m.mode }}</span>
+            </div>
+            <div class="quota-provider-card__stats" style="grid-template-columns: 1fr;">
+              <div class="qstat">
+                <span class="qstat__label">{{ t('dashboard.active_mounts_detail') }}</span>
+                <span class="qstat__value" style="font-size:13px;font-weight:400;">{{ m.providerName }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <div class="dashboard-panels">
       <section class="panel">
         <div class="panel__header">
@@ -221,7 +244,7 @@ onMounted(() => {
             <div>
               <p class="status-row__name">{{ t('dashboard.quota_sync') }}</p>
               <p class="status-row__detail">
-                {{ store.currentQuota ? t('dashboard.last_updated', { time: new Date(store.currentQuota.updated_at).toLocaleString(locale.value) }) : t('dashboard.no_quota_data') }}
+                {{ store.currentQuota ? t('dashboard.last_updated', { time: new Date(store.currentQuota.updated_at).toLocaleString(locale) }) : t('dashboard.no_quota_data') }}
               </p>
             </div>
             <StatusBadge :state="store.currentQuota ? 'active' : 'disabled'" />

@@ -11,6 +11,7 @@ const { t } = useI18n()
 
 const username = ref('')
 const password = ref('')
+const passwordInput = ref<HTMLInputElement | null>(null)
 const loading = ref(false)
 const errorMsg = ref('')
 
@@ -19,6 +20,10 @@ async function handleLogin() {
   const pass = password.value
 
   if (!name || !pass) {
+    if (name && !pass) {
+      passwordInput.value?.focus()
+      return
+    }
     errorMsg.value = t('login.error_empty')
     return
   }
@@ -56,6 +61,8 @@ async function handleLogin() {
             type="text"
             :placeholder="t('login.username_placeholder')"
             autocomplete="username"
+            autofocus
+            @keydown.enter="passwordInput?.focus()"
           />
         </label>
         <label>
@@ -65,6 +72,8 @@ async function handleLogin() {
             type="password"
             placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
             autocomplete="current-password"
+            ref="passwordInput"
+            @keyup.enter="handleLogin"
           />
         </label>
 

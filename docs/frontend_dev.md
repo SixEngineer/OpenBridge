@@ -790,3 +790,75 @@ http://localhost:5173/dashboard
 - 管理员模式已从"页面级拦截"改为"操作级控制"
 
 ---
+
+## 2026-06-06 下载状态重构与交互完善
+
+### 本次完成内容
+
+对下载任务的状态机逻辑进行全面重构，联动后端修复 aria2 离线检测，优化轮询策略、清空按钮行为、登录键盘导航和 Dashboard 交互细节。
+
+- **下载状态机重构（前后端协作）**
+  - 后端 `CreateTask`：初始状态从 `"active"` 改为 `"waiting"`，更准确表达刚提交尚未开始的状态
+  - 后端 `GetTask`：TellStatus 成功时写入 `FinishedAt` 时间戳；TellStatus 返回"GID not found"且当前不是 `complete` 时将任务标记为 `error`
+  - 修复 aria2 错误消息匹配：aria2 实际返回 `"GID xxxx is not found"`（非文档中的 `"No such download"`），字符串匹配改为 `strings.Contains(err.Error(), "not found")`
+  - 修复全部标记为 error 的问题：增加 `&& task.Status != "complete"` 保护，已完成的任务不受影响
+  - aria2 网络错误（如连接被拒）保留当前状态，不误判为 error
+  - 预留空 GID 检查和类型断言安全保护
+
+- **轮询优化（前端）**
+  - 移除 12 次硬限制（原 12×25s=5min），改为无限制轮询
+  - 间隔从 25s 缩短到 5s
+  - 仅当存在活跃任务（等待/下载中）时保持轮询，全部结束后自动停止
+
+- **清空按钮行为重写**
+  - 根据当前筛选标签删除任务（如"失败"标签只删失败任务）
+  - 不再全部页面一刀切删除
+  - 未选中时显示"清空当前"，有选中项时显示"清除 (N)"
+
+- **Dashboard 挂载点卡片改进**
+  - 移除活跃挂载点下方的已用量显示（无实际意义）
+  - 实现点开展示所有挂载点列表
+  - 展开挂载点时自动折叠存储用量展开，反之亦然（互斥展开）
+
+- **登录页键盘导航**
+  - 进入页面自动聚焦用户名输入框（`autofocus`）
+  - 用户名框按回车跳转到密码框 `passwordInput.value?.focus()`
+  - 密码框按回车触发登录
+  - 用户名已填但密码为空时聚焦密码框而不是显示错误提示
+
+- **MetricCard 组件优化**
+  - trend 字段为空时不渲染空白行（`v-if="item.trend"`）
+
+- **下载任务详情增强**
+  - 直链行新增"点击复制"按钮（Clipboard API）
+  - 直链横向滚动显示
+  - 已完成界面显示完成时间（`FinishedAt`），其他标签显示创建时间
+
+- **国际化补充**
+  - zh-CN：`finished_col`、"完成时间"、`clear_filtered`、"清空当前"
+  - en.json：`finished_col`、"Finished"、`clear_filtered`、"Clear Current"
+
+### 涉及文件
+
+- `frontend/src/views/DownloadTasksView.vue`（状态映射、轮询、清空、详情面板）
+- `frontend/src/views/DashboardView.vue`（挂载点展开、互斥逻辑）
+- `frontend/src/views/LoginView.vue`（键盘导航、自动聚焦）
+- `frontend/src/components/common/MetricCard.vue`（条件渲染 trend）
+- `frontend/src/i18n/locales/zh-CN.json`
+- `frontend/src/i18n/locales/en.json`
+- `backend/internal/usecase/download_usecase.go`（状态机、FinishedAt、error 检测）
+
+### 当前状态
+
+- 下载状态机逻辑完整：waiting → active → complete/error，aria2 离线可正确检测
+- 轮询 5s 间隔实时感知任务状态变化，无活跃任务时零开销
+- 清空按钮行为匹配用户当前筛选视图，不再误删
+- Dashboard 和登录页交互更流畅
+
+### 后续待做
+
+- 批量下载操作（全选后批量重试/删除）
+- aria2 RPC 重连机制（aria2 重启后自动恢复任务状态同步）
+- 错误详情弹窗（点击失败任务查看具体错误信息）
+
+---

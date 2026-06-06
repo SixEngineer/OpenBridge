@@ -1,13 +1,9 @@
 // 与后端 entity.DownloadTask 字段对齐（Go 默认 PascalCase JSON 序列化）
 export type DownloadStatus =
-  | 'pending'
-  | 'resolving'
-  | 'resolved'
-  | 'submitted'
-  | 'downloading'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+  | 'waiting'
+  | 'active'
+  | 'error'
+  | 'complete'
 
 // 直链解析结果（后端 json 为 snake_case）
 export interface DirectLinkResult {

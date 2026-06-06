@@ -65,7 +65,7 @@ func (u *DownloadUseCase) CreateTask(path string, dir string) (*entity.DownloadT
 		FileName:   directLink.Name,
 		FileSize:   directLink.Size,
 		Aria2GID:   gid,
-		Status:     "active",
+		Status:     "waiting",
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -83,19 +83,21 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 
 	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
 	if err != nil {
-	    return nil, err
+		return nil, err
 	}
 
-	status, err := u.aria2Client.TellStatus(task.Aria2GID)
-	if err != nil {
-	    return nil, err
-	}
-
-	// fmt.Println(status["status"])
-
-	task.Status = status["status"].(string)
-
-	u.downloadRepo.UpdateTask(task)
+	if status, err := u.aria2Client.TellStatus(task.Aria2GID); err == nil {
+		task.Status = status["status"].(string)
+		if task.Status == "complete" && task.FinishedAt == nil {
+			now := time.Now()
+			task.FinishedAt = &now
+		}
+		u.downloadRepo.UpdateTask(task)
+	} else if strings.Contains(err.Error(), "not found") && task.Status != "complete" {
+		// GID not found in aria2 → task was removed or expired → mark as error.
+		task.Status = "error"
+		u.downloadRepo.UpdateTask(task)
+	} // Network errors (aria2 unreachable) or already complete: keep current DB status.
 
 	return task, nil
 }

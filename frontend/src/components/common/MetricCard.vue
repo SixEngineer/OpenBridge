@@ -15,7 +15,7 @@ defineEmits<{
     <p class="metric-card__title">{{ item.title }}</p>
     <p class="metric-card__value">{{ item.value }}</p>
     <p class="metric-card__detail">{{ item.detail }}</p>
-    <p class="metric-card__trend">{{ item.trend }}</p>
+    <p v-if="item.trend" class="metric-card__trend">{{ item.trend }}</p>
   </article>
 </template>
 
