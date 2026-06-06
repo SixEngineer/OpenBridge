@@ -21,12 +21,59 @@ export const useConsoleStore = defineStore('console', () => {
 
   const providers = ref<ProviderRecord[]>([])
 
-  const currentQuota = ref<QuotaInfo | null>(null)
+  // 最近一次配额数据（持久化到 localStorage，页面切换/重登录后保持显示）
+  const QUOTA_KEY = 'openbridge_current_quota'
+  const QUOTA_MODE_KEY = 'openbridge_current_quota_mode'
+  const QUOTA_EXTRA_KEY = 'openbridge_current_quota_extra'
+  const storedQuota = (() => {
+    try {
+      const raw = localStorage.getItem(QUOTA_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  })()
+  const storedQuotaMode = (() => {
+    try {
+      return localStorage.getItem(QUOTA_MODE_KEY)
+    } catch { return null }
+  })()
+  const storedQuotaExtra = (() => {
+    try {
+      const raw = localStorage.getItem(QUOTA_EXTRA_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  })()
+  const currentQuota = ref<QuotaInfo | null>(storedQuota)
+  const currentQuotaMode = ref<string | null>(storedQuotaMode)
+  const currentQuotaExtra = ref<{ inherit_chain?: number[]; virtual_config?: Record<string, number> } | null>(storedQuotaExtra)
   const quotaLoading = ref(false)
 
-  // provider_account_id → mount_id 映射
-  const mountIdByProvider = ref<Record<number, number>>({})
+  // provider_account_id → mount_id 映射（持久化到 localStorage，避免页面切换后丢失）
+  const MOUNT_MAP_KEY = 'openbridge_mount_id_by_provider'
+  const storedMountMap = (() => {
+    try {
+      const raw = localStorage.getItem(MOUNT_MAP_KEY)
+      return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+  })()
+  const mountIdByProvider = ref<Record<number, number>>(storedMountMap)
   const mountCreating = ref(false)
+
+  // 挂载点详情列表（用于 inherit 模式选择父挂载点）— 也持久化
+  const MOUNTS_KEY = 'openbridge_mounts'
+  interface MountInfo {
+    id: number
+    name: string
+    mode: string
+    providerName: string
+    providerId: number
+  }
+  const storedMounts = (() => {
+    try {
+      const raw = localStorage.getItem(MOUNTS_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch { return [] }
+  })()
+  const mounts = ref<MountInfo[]>(storedMounts)
 
   // Auth state — persisted across page refreshes
   const AUTH_KEY = 'openbridge_auth'
@@ -60,6 +107,20 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.setItem(DD_KEY, dir)
   }
 
+  // Admin mode — unlocked by double-clicking OpenList status in topbar
+  const ADMIN_KEY = 'openbridge_admin'
+  const isAdmin = ref(localStorage.getItem(ADMIN_KEY) === 'true')
+
+  function unlockAdmin() {
+    isAdmin.value = true
+    localStorage.setItem(ADMIN_KEY, 'true')
+  }
+
+  function lockAdmin() {
+    isAdmin.value = false
+    localStorage.removeItem(ADMIN_KEY)
+  }
+
   // 获取 Provider 列表
   async function fetchProviders() {
     try {
@@ -71,6 +132,12 @@ export const useConsoleStore = defineStore('console', () => {
       console.error('获取 Provider 列表失败', error)
       providers.value = []
     }
+  }
+
+  // 持久化 mount 映射到 localStorage（避免页面切换后丢失）
+  function saveMountMapping() {
+    localStorage.setItem(MOUNT_MAP_KEY, JSON.stringify(mountIdByProvider.value))
+    localStorage.setItem(MOUNTS_KEY, JSON.stringify(mounts.value))
   }
 
   // 删除 Provider
@@ -88,6 +155,23 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
+  // 持久化最近一次配额数据（页面切换/重登录后直接显示，不等异步查询）
+  function saveQuotaData() {
+    if (currentQuota.value) {
+      localStorage.setItem(QUOTA_KEY, JSON.stringify(currentQuota.value))
+    }
+    if (currentQuotaMode.value) {
+      localStorage.setItem(QUOTA_MODE_KEY, currentQuotaMode.value)
+    } else {
+      localStorage.removeItem(QUOTA_MODE_KEY)
+    }
+    if (currentQuotaExtra.value) {
+      localStorage.setItem(QUOTA_EXTRA_KEY, JSON.stringify(currentQuotaExtra.value))
+    } else {
+      localStorage.removeItem(QUOTA_EXTRA_KEY)
+    }
+  }
+
   // 通过 Mount 查询配额
   async function queryQuotaByMount(mountId: number) {
     quotaLoading.value = true
@@ -95,6 +179,12 @@ export const useConsoleStore = defineStore('console', () => {
       const res = await queryMountQuota(mountId)
       if (res.code === 1000) {
         currentQuota.value = res.data.quota
+        currentQuotaMode.value = res.data.mode
+        currentQuotaExtra.value = {
+          inherit_chain: res.data.inherit_chain,
+          virtual_config: res.data.virtual_config,
+        }
+        saveQuotaData()
       }
       return res
     } catch (error) {
@@ -112,6 +202,12 @@ export const useConsoleStore = defineStore('console', () => {
       const res = await syncMountQuota(mountId)
       if (res.code === 1000) {
         currentQuota.value = res.data.quota
+        currentQuotaMode.value = res.data.mode
+        currentQuotaExtra.value = {
+          inherit_chain: res.data.inherit_chain,
+          virtual_config: res.data.virtual_config,
+        }
+        saveQuotaData()
       }
       return res
     } catch (error) {
@@ -129,7 +225,8 @@ export const useConsoleStore = defineStore('console', () => {
     providerType: string,
     rootPath?: string,
     quotaMode: string = 'real',
-    virtualTotal?: number
+    virtualTotal?: number,
+    inheritFromId?: number
   ): Promise<MountPoint | null> {
     mountCreating.value = true
     try {
@@ -145,9 +242,20 @@ export const useConsoleStore = defineStore('console', () => {
         payload.virtual_total = virtualTotal
         payload.virtual_used = 0
       }
+      if (quotaMode === 'inherit' && inheritFromId !== undefined) {
+        payload.inherit_from_id = inheritFromId
+      }
       const res = await createMount(payload)
       if (res.code === 1000) {
         mountIdByProvider.value[providerId] = res.data.id
+        mounts.value.push({
+          id: res.data.id,
+          name: payload.name || `${providerName} Mount`,
+          mode: quotaMode,
+          providerName,
+          providerId,
+        })
+        saveMountMapping()
         return res.data
       }
       return null
@@ -205,8 +313,11 @@ export const useConsoleStore = defineStore('console', () => {
     fetchProviders,
     removeProvider,
     currentQuota,
+    currentQuotaMode,
+    currentQuotaExtra,
     quotaLoading,
     mountIdByProvider,
+    mounts,
     mountCreating,
     queryQuotaByMount,
     syncQuotaByMount,
@@ -219,6 +330,9 @@ export const useConsoleStore = defineStore('console', () => {
     currentUser,
     login,
     logout,
+    isAdmin,
+    unlockAdmin,
+    lockAdmin,
     defaultDownloadDir,
     setDefaultDownloadDir,
   }

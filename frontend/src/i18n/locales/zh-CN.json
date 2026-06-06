@@ -5,11 +5,11 @@
   },
   "topbar": {
     "title": "OpenBridge 控制台",
-    "subtitle": "统一管理 Provider、配额和下载任务",
+    "subtitle": "统一管理服务商、配额和下载任务",
     "login": "登录",
     "logout": "退出登录",
     "openlist_checking": "正在检测 OpenList...",
-    "openlist_connected": "OpenList 已连接（{count} 个驱动）",
+    "openlist_connected": "OpenList 已连接",
     "openlist_disconnected": "OpenList 未连接",
     "switch_to_cn": "切换到中文",
     "switch_to_en": "切换到英文"
@@ -22,9 +22,9 @@
       "dashboard": "仪表盘",
       "dashboard_desc": "系统概览",
       "openlist": "OpenList",
-      "openlist_desc": "网盘源访问",
+      "openlist_desc": "文件浏览",
       "providers": "服务商",
-      "providers_desc": "适配器注册",
+      "providers_desc": "服务商管理",
       "tasks": "下载任务",
       "tasks_desc": "下载控制中心",
       "quota": "配额管理",
@@ -71,7 +71,7 @@
     "openlist_offline": "离线",
     "openlist_trend_ok": "服务正常",
     "openlist_trend_error": "服务不可用",
-    "connected_drivers": "{count} 个驱动可用",
+    "openlist_connected": "已连接",
     "api_error": "API 错误",
     "not_connected": "未连接",
     "system_health": "系统健康",
@@ -106,6 +106,7 @@
     "size": "大小",
     "modified": "修改时间",
     "action": "操作",
+    "root_name": "主页",
     "download": "下载"
   },
   "portal": {
@@ -115,7 +116,7 @@
     "openlist_connected": "OpenList 已连接",
     "openlist_disconnected": "OpenList 未连接",
     "eyebrow": "网桥控制台",
-    "subtitle": "统一管理 Provider、配额和下载任务",
+    "subtitle": "统一管理服务商、配额和下载任务",
     "sign_in": "登录"
   },
   "providers": {
@@ -137,7 +138,8 @@
     "registered_success": "注册成功！",
     "delete_confirm": "删除",
     "delete_success": "删除成功！",
-    "delete_failed": "删除失败，请重试"
+    "delete_failed": "删除失败，请重试",
+    "name_exists": "已存在同名服务商"
   },
   "provider_form": {
     "title_add": "注册服务商",
@@ -150,7 +152,7 @@
     "local_path_hint": "使用 GetDiskFreeSpaceEx 读取该路径所在磁盘的真实总容量、已用量和可用量。",
     "baidu_token": "百度 Access Token *",
     "baidu_token_placeholder": "粘贴百度 access_token",
-    "baidu_token_hint": "获取方式：打开 pan.baidu.com → F12 → Network → 过滤 quota，在请求 URL 中找到 access_token=xxx，复制 xxx 部分。",
+    "baidu_token_hint": "获取方式：通过百度网盘验证登录填写对应的 Key，获取令牌。",
     "quark_cookie": "夸克 Cookie *",
     "quark_cookie_placeholder": "粘贴夸克 Cookie 字符串",
     "quark_cookie_hint": "获取方式：打开 pan.quark.cn → F12 → Network → 点任意请求 → 在请求头中找到 Cookie → 右键复制值。Cookie 必须包含 __pus 和 __t 字段。",
@@ -158,6 +160,8 @@
     "account_id_placeholder": "仅作参考",
     "account_id_hint": "用于区分同一类型的多个账户，可以留空。",
     "status": "状态",
+    "get_token": "点我获取 Token",
+    "get_cookie": "点我获取 Cookie",
     "about_quota": "关于配额",
     "baidu_notice": "注册后创建 Mount → 同步配额。BaiduProvider 将使用你的 access_token 从百度 API 获取真实容量数据。",
     "quark_notice": "注册后创建 Mount → 同步配额。QuarkProvider 将使用你的 cookie 从夸克 API 获取真实容量数据。不支持直接下载。",
@@ -167,7 +171,7 @@
     "save": "保存",
     "register": "注册",
     "options": {
-      "generic": "通用（推荐）",
+      "generic": "通用",
       "generic_desc": "所有操作通过 OpenList API 路由，适用于任何在 OpenList 中配置的网盘。",
       "baidu": "百度网盘（直连，需要 token）",
       "baidu_desc": "专用百度后端，支持直接下载。需要百度 access_token。",
@@ -202,8 +206,11 @@
     "virtual": "虚拟",
     "virtual_desc": "虚拟容量（手动指定总量）",
     "inherit": "继承",
-    "inherit_desc": "继承父级配额（暂不可用）",
-    "inherit_title": "需要已有的 Mount 作为父级，暂不可用",
+    "inherit_desc": "镜像父挂载点的配额",
+    "inherit_title": "从 real 模式的挂载点继承",
+    "inherit_parent": "父挂载点",
+    "inherit_select_hint": "-- 选择一个挂载点 --",
+    "inherit_no_parents": "没有可用的 real 模式挂载点。请先创建一个 real 模式的挂载点。",
     "virtual_total": "虚拟总容量 (MB)",
     "placeholder_gb": "例如 102400（100 GB）",
     "total": "总配额",
@@ -248,7 +255,17 @@
     "started": "开始时间",
     "finished": "完成时间",
     "created": "创建时间",
-    "updated": "更新时间"
+    "updated": "更新时间",
+    "status_all": "全部",
+    "status_submitted": "已提交",
+    "status_downloading": "下载中",
+    "status_completed": "已完成",
+    "status_failed": "失败",
+    "status_cancelled": "已取消",
+    "stop_refresh": "停止",
+    "clear_completed": "清空全部",
+    "clear_selected": "清除",
+    "copy_link": "点击复制"
   },
   "download_dialog": {
     "title": "下载确认",
@@ -270,7 +287,9 @@
     "close": "关闭",
     "done": "完成",
     "task_created": "任务已创建：",
-    "create_failed": "创建失败"
+    "create_failed": "创建失败",
+    "copy_link": "复制直链",
+    "copied": "已复制！"
   },
   "settings": {
     "title": "设置",
@@ -282,6 +301,7 @@
     "openlist": "OpenList",
     "openlist_url": "基础 URL",
     "openlist_status": "状态",
+    "openlist_connected": "已连接",
     "openlist_disconnected": "未连接（在 OpenList 桌面端中配置）",
     "checking_status": "检查中...",
     "api_error": "API 错误",
@@ -296,7 +316,13 @@
     "download_dir": "默认下载目录",
     "dir_placeholder": "例如 D:\\Downloads",
     "dir_hint": "留空使用 aria2 配置的默认值。更改仅对新下载生效。",
-    "save": "保存"
+    "save": "保存",
+    "reset": "重置用户数据",
+    "reset_desc": "清空所有服务商、挂载点、下载任务和配额数据。此操作不可撤销。",
+    "reset_button": "重置所有数据",
+    "reset_confirm": "确定要重置所有用户数据吗？这将永久删除所有服务商、挂载点、任务和配额记录。",
+    "reset_success": "所有用户数据已清空",
+    "reset_failed": "重置用户数据失败"
   },
   "debug": {
     "title": "调试",

@@ -15,7 +15,10 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 async function handleLogin() {
-  if (!username.value.trim() || !password.value.trim()) {
+  const name = username.value.trim()
+  const pass = password.value
+
+  if (!name || !pass) {
     errorMsg.value = t('login.error_empty')
     return
   }
@@ -24,12 +27,9 @@ async function handleLogin() {
   errorMsg.value = ''
 
   try {
-    const res = await userLogin({
-      username: username.value.trim(),
-      password: password.value,
-    })
+    const res = await userLogin({ username: name, password: pass })
     if (res.code === 1000) {
-      store.login(username.value.trim())
+      store.login(name)
       router.push('/dashboard')
     } else {
       errorMsg.value = (res.msg as string) || t('login.error_failed')

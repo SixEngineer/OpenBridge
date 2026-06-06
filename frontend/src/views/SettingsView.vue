@@ -4,6 +4,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
+import { userReset } from '@/api/user'
 
 const store = useConsoleStore()
 const { t } = useI18n()
@@ -37,7 +38,7 @@ async function checkOpenList() {
     const res = await getDrivers()
     if (res.code === 1000 || res.code === 0) {
       openListStatus.value = 'active'
-      openListDetail.value = t('settings.connected_drivers', { count: res.data?.length || 0 })
+      openListDetail.value = t('settings.openlist_connected')
     } else {
       openListStatus.value = 'error'
       openListDetail.value = t('settings.api_error')
@@ -51,6 +52,27 @@ async function checkOpenList() {
 onMounted(() => {
   checkOpenList()
 })
+
+const resetting = ref(false)
+const confirmReset = ref(false)
+
+async function handleReset() {
+  if (!confirmReset.value) {
+    confirmReset.value = true
+    return
+  }
+  resetting.value = true
+  try {
+    await userReset()
+    store.fetchProviders()
+    confirmReset.value = false
+    alert(t('settings.reset_success'))
+  } catch (e: any) {
+    alert(e.message || t('settings.reset_failed'))
+  } finally {
+    resetting.value = false
+  }
+}
 </script>
 
 <template>
@@ -139,6 +161,20 @@ onMounted(() => {
         </div>
       </article>
     </div>
+
+    <article class="card card--danger">
+      <h3 class="card__title">{{ t('settings.reset') }}</h3>
+      <div class="card__body">
+        <p class="danger-desc">{{ t('settings.reset_desc') }}</p>
+        <button
+          class="btn btn--danger"
+          :disabled="resetting"
+          @click="handleReset"
+        >
+          {{ confirmReset ? t('settings.reset_confirm') : t('settings.reset_button') }}
+        </button>
+      </div>
+    </article>
   </section>
 </template>
 
@@ -266,4 +302,30 @@ code.field__value {
   font-size: 12px;
   color: #6b7280;
 }
+
+.card--danger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.danger-desc {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #991b1b;
+  line-height: 1.5;
+}
+
+.btn--danger {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: #ef4444;
+  color: white;
+  transition: background 0.2s;
+}
+.btn--danger:hover:not(:disabled) { background: #dc2626; }
+.btn--danger:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

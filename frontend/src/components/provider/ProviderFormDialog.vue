@@ -131,25 +131,24 @@ function handleSubmit() {
         <!-- Baidu access token -->
         <div v-if="formData.net_disk === 'baidu'" class="form-group">
           <label>{{ t('provider_form.baidu_token') }}</label>
-          <input v-model="formData.access_token" type="password" :placeholder="t('provider_form.baidu_token_placeholder')" />
+          <div class="token-input-row">
+            <input v-model="formData.access_token" type="password" :placeholder="t('provider_form.baidu_token_placeholder')" />
+            <a href="https://api.oplist.org" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_token') }}</a>
+          </div>
           <small v-html="t('provider_form.baidu_token_hint')"></small>
         </div>
 
         <!-- Quark cookie -->
         <div v-if="formData.net_disk === 'quark'" class="form-group">
           <label>{{ t('provider_form.quark_cookie') }}</label>
-          <input v-model="formData.auth_cookie" type="password" :placeholder="t('provider_form.quark_cookie_placeholder')" />
+          <div class="token-input-row">
+            <input v-model="formData.auth_cookie" type="password" :placeholder="t('provider_form.quark_cookie_placeholder')" />
+            <a href="https://pan.quark.cn" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_cookie') }}</a>
+          </div>
           <small v-html="t('provider_form.quark_cookie_hint')"></small>
         </div>
 
-        <!-- Account ID (for non-local types) -->
-        <div v-if="formData.net_disk !== 'local'" class="form-group">
-          <label>{{ t('provider_form.account_id') }}</label>
-          <input v-model="formData.account_id" type="text" :placeholder="t('provider_form.account_id_placeholder')" />
-          <small>{{ t('provider_form.account_id_hint') }}</small>
-        </div>
-
-        <div v-if="provider" class="form-group">
+<div v-if="provider" class="form-group">
           <label>{{ t('provider_form.status') }}</label>
           <select v-model="formData.status">
             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
@@ -264,6 +263,32 @@ function handleSubmit() {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.token-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.token-input-row input {
+  flex: 1;
+}
+.btn--link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn--link:hover {
+  background: #2563eb;
+  color: white;
 }
 
 .form-group small {

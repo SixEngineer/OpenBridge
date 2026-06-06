@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import DownloadDialog from '@/components/download/DownloadDialog.vue'
 import { getFiles } from '@/api/storage'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const currentPath = ref('/')
 const pathInput = ref('/')
@@ -13,6 +13,49 @@ const files = ref<any[]>([])
 const filesLoading = ref(false)
 const filesError = ref('')
 const contentProvider = ref('')
+
+// Sort state
+const sortField = ref<'name' | 'size' | 'modified'>('name')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+const sortedFiles = computed(() => {
+  const list = [...files.value]
+  const field = sortField.value
+  const order = sortOrder.value
+  list.sort((a, b) => {
+    // 按名称或修改时间排序时，文件夹排前面；按大小排序时，根据升降序决定文件夹位置
+    if (field !== 'size' && a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1
+    if (field === 'size' && a.is_dir !== b.is_dir) {
+      return order === 'asc' ? (a.is_dir ? -1 : 1) : (a.is_dir ? 1 : -1)
+    }
+    let va = a[field]
+    let vb = b[field]
+    if (field === 'size') {
+      va = va || 0
+      vb = vb || 0
+      return order === 'asc' ? va - vb : vb - va
+    }
+    // String fields
+    va = (va || '').toString().toLowerCase()
+    vb = (vb || '').toString().toLowerCase()
+    return order === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+  })
+  return list
+})
+
+function toggleSort(field: 'name' | 'size' | 'modified') {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+function sortIndicator(field: string): string {
+  if (sortField.value !== field) return ''
+  return sortOrder.value === 'asc' ? ' ▲' : ' ▼'
+}
 
 // Download dialog
 const downloadDialogVisible = ref(false)
@@ -47,19 +90,30 @@ async function fetchFiles() {
   }
 }
 
+function navigateTo(path: string) {
+  pathInput.value = path
+  fetchFiles()
+}
+
+const breadcrumbSegments = computed(() => {
+  const parts = currentPath.value.replace(/\/+$/, '').split('/').filter(Boolean)
+  const segments: { name: string; path: string; isLast: boolean }[] = []
+  // Root segment
+  segments.push({ name: t('openlist.root_name'), path: '/', isLast: parts.length === 0 })
+  // Build up each sub-path
+  let accumulated = ''
+  parts.forEach((part, i) => {
+    accumulated += '/' + part
+    segments.push({ name: part, path: accumulated, isLast: i === parts.length - 1 })
+  })
+  return segments
+})
+
 function enterDir(item: any) {
   if (item.is_dir) {
     let newPath = currentPath.value.replace(/\/+$/, '') + '/' + item.name
-    pathInput.value = newPath
-    fetchFiles()
+    navigateTo(newPath)
   }
-}
-
-function goUp() {
-  const parts = currentPath.value.replace(/\/+$/, '').split('/')
-  parts.pop()
-  pathInput.value = parts.join('/') || '/'
-  fetchFiles()
 }
 
 function formatSize(bytes: number): string {
@@ -73,7 +127,7 @@ function formatSize(bytes: number): string {
 function formatTime(t: string | number | Date): string {
   if (!t) return '—'
   try {
-    return new Date(t).toLocaleString()
+    return new Date(t).toLocaleString(locale.value)
   } catch {
     return String(t)
   }
@@ -92,25 +146,16 @@ onMounted(fetchFiles)
     <section class="panel">
       <div class="panel__header">
         <h3>{{ t('openlist.file_browser') }}</h3>
-        <span v-if="contentProvider" class="provider-tag">{{ contentProvider }}</span>
-        <span v-else class="breadcrumb">{{ currentPath }}</span>
+        <span v-if="contentProvider && contentProvider !== 'unknown'" class="provider-tag">{{ contentProvider }}</span>
+        <span v-else class="panel-path">{{ currentPath }}</span>
       </div>
 
-      <div class="browser-controls">
-        <div class="path-row">
-          <button class="btn btn--sm" @click="goUp" :disabled="currentPath === '/'">{{ t('openlist.up') }}</button>
-          <input
-            v-model="pathInput"
-            class="path-input"
-            placeholder="/"
-            @keyup.enter="fetchFiles"
-          />
-          <button class="btn btn--primary btn--sm" :disabled="filesLoading" @click="fetchFiles">
-            {{ filesLoading ? t('openlist.loading') : t('openlist.go') }}
-          </button>
-          <button class="btn btn--sm" @click="pathInput = '/'; fetchFiles()">{{ t('openlist.root') }}</button>
-        </div>
-      </div>
+      <nav class="breadcrumb">
+        <template v-for="(seg, i) in breadcrumbSegments" :key="i">
+          <span class="breadcrumb__link" @click="navigateTo(seg.path)">{{ seg.name }}</span>
+          <span v-if="!seg.isLast" class="breadcrumb__sep">/</span>
+        </template>
+      </nav>
 
       <div v-if="filesError" class="msg msg--error">{{ filesError }}</div>
 
@@ -118,13 +163,13 @@ onMounted(fetchFiles)
 
       <div v-else-if="files.length > 0" class="file-table">
         <div class="file-table__head">
-          <span>{{ t('openlist.name') }}</span>
-          <span>{{ t('openlist.size') }}</span>
-          <span>{{ t('openlist.modified') }}</span>
+          <span class="sortable" @click="toggleSort('name')">{{ t('openlist.name') }}<span class="sort-arrow">{{ sortIndicator('name') }}</span></span>
+          <span class="sortable" @click="toggleSort('size')">{{ t('openlist.size') }}<span class="sort-arrow">{{ sortIndicator('size') }}</span></span>
+          <span class="sortable" @click="toggleSort('modified')">{{ t('openlist.modified') }}<span class="sort-arrow">{{ sortIndicator('modified') }}</span></span>
           <span>{{ t('openlist.action') }}</span>
         </div>
         <div
-          v-for="f in files"
+          v-for="f in sortedFiles"
           :key="f.name"
           class="file-row"
           :class="{ 'file-row--dir': f.is_dir }"
@@ -195,7 +240,7 @@ onMounted(fetchFiles)
   border: 1px solid #fecaca;
 }
 
-.breadcrumb {
+.panel-path {
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
   color: #6b7280;
@@ -218,29 +263,35 @@ onMounted(fetchFiles)
   font-size: 13px;
 }
 
-.browser-controls {
-  margin-bottom: 16px;
-}
-
-.path-row {
+.breadcrumb {
   display: flex;
-  gap: 8px;
   align-items: center;
-}
-
-.path-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  gap: 4px;
+  padding: 10px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 16px;
   font-size: 14px;
-  font-family: 'SFMono-Regular', Consolas, monospace;
-  outline: none;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
-.path-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+.breadcrumb__link {
+  color: #374151;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.breadcrumb__link:hover {
+  background: #e5e7eb;
+}
+
+.breadcrumb__sep {
+  color: #9ca3af;
+  margin: 0 2px;
 }
 
 .provider-tag {
@@ -317,4 +368,14 @@ onMounted(fetchFiles)
   transition: background 0.2s;
 }
 .btn-download:hover { background: #2563eb; }
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.sortable:hover { color: #374151; }
+
+.sort-arrow {
+  font-size: 11px;
+}
 </style>

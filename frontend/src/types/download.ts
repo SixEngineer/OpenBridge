@@ -9,14 +9,14 @@ export type DownloadStatus =
   | 'failed'
   | 'cancelled'
 
-// 直链解析结果
+// 直链解析结果（后端 json 为 snake_case）
 export interface DirectLinkResult {
-  Path: string
-  Name: string
-  Size: number
-  Provider: string
-  DirectLink: string
-  IsOpenListProxy: boolean
+  path: string
+  name: string
+  size: number
+  provider: string
+  direct_link: string
+  is_openlist_proxy: boolean
 }
 
 export interface DownloadTask {

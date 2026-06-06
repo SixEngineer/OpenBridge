@@ -15,6 +15,18 @@ const store = useConsoleStore()
 const dialogVisible = ref(false)
 const editingProvider = ref<ProviderRecord | null>(null)
 
+// Toast notification
+const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.value = { show: true, message, type }
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, 2500)
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -28,6 +40,12 @@ function formatProviderQuota(mb: number): string {
   return formatBytes(mb * 1024 * 1024)
 }
 
+// Mock providers store values in GB but backend reports as MB
+function displayQuota(mb: number, providerType: string): string {
+  const scale = providerType === 'mock' ? 1024 : 1
+  return formatProviderQuota(mb * scale)
+}
+
 function openAddDialog() {
   editingProvider.value = null
   dialogVisible.value = true
@@ -39,6 +57,14 @@ function openEditDialog(provider: ProviderRecord) {
 }
 
 async function handleSubmit(data: Partial<ProviderRecord>) {
+  // 检查同名（编辑时排除自身）
+  if (!editingProvider.value?.id) {
+    const exists = store.providers.some(p => p.name === data.name)
+    if (exists) {
+      showToast(t('providers.name_exists'), 'error')
+      return
+    }
+  }
   try {
     let res
     if (editingProvider.value?.id) {
@@ -48,16 +74,16 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
     }
 
     if (res.code === 1000 || res.code === 0) {
-      alert(editingProvider.value ? t('providers.updated_success') : t('providers.registered_success'))
+      showToast(editingProvider.value ? t('providers.updated_success') : t('providers.registered_success'))
       dialogVisible.value = false
       editingProvider.value = null
       await store.fetchProviders()
     } else {
-      alert('Failed: ' + (res.msg))
+      showToast('Failed: ' + (res.msg), 'error')
     }
   } catch (error: any) {
     console.error('Operation failed', error)
-    alert(t('common.error') + ' ' + (error?.message || t('common.operation_failed')))
+    showToast(error?.message || t('common.operation_failed'), 'error')
   }
 }
 
@@ -68,9 +94,9 @@ async function handleDelete(provider: ProviderRecord) {
 
   const success = await store.removeProvider(provider.id)
   if (success) {
-    alert(t('providers.delete_success'))
+    showToast(t('providers.delete_success'))
   } else {
-    alert(t('providers.delete_failed'))
+    showToast(t('providers.delete_failed'), 'error')
   }
 }
 
@@ -119,14 +145,17 @@ onMounted(() => {
           </div>
         </div>
 
-        <p class="provider-card__section-title">{{ provider.net_disk === 'local' ? t('providers.local_path') : t('providers.account_id') }}</p>
-        <p class="provider-card__text">{{ provider.account_id || t('providers.not_set') }}</p>
+        <template v-if="provider.net_disk === 'local'">
+          <p class="provider-card__section-title">{{ t('providers.local_path') }}</p>
+          <p class="provider-card__text">{{ provider.account_id || t('providers.not_set') }}</p>
+        </template>
+        <div v-else class="provider-card__placeholder"></div>
 
         <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
         <p class="provider-card__text">
-          {{ t('providers.total') }} {{ formatProviderQuota(provider.total_quota) }}<br>
-          {{ t('providers.used') }} {{ formatProviderQuota(provider.used_quota) }}<br>
-          {{ t('providers.available') }} {{ formatProviderQuota(provider.available_quota) }}
+          {{ t('providers.total') }} {{ displayQuota(provider.total_quota, provider.provider_type) }}<br>
+          {{ t('providers.used') }} {{ displayQuota(provider.used_quota, provider.provider_type) }}<br>
+          {{ t('providers.available') }} {{ displayQuota(provider.available_quota, provider.provider_type) }}
         </p>
         
         <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>
@@ -141,6 +170,12 @@ onMounted(() => {
       :provider="editingProvider"
       @submit="handleSubmit"
     />
+
+    <transition name="toast-fade">
+      <div v-if="toast.show" class="toast" :class="`toast--${toast.type}`">
+        {{ toast.message }}
+      </div>
+    </transition>
   </section>
 </template>
 
@@ -242,6 +277,10 @@ onMounted(() => {
   color: #ef4444;
 }
 
+.provider-card__placeholder {
+  height: 43px;
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
@@ -270,4 +309,34 @@ onMounted(() => {
 .btn--primary:hover {
   background: #2563eb;
 }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+.toast--success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.toast--error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.toast-fade-enter-active { transition: all 0.3s ease; }
+.toast-fade-leave-active { transition: all 0.3s ease; }
+.toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+.toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 </style>

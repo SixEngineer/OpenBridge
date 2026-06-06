@@ -16,6 +16,9 @@ const resolving = ref(false)
 const resolveError = ref('')
 const linkResult = ref<DirectLinkResult | null>(null)
 
+// Copy state
+const copied = ref(false)
+
 // Create state
 const creating = ref(false)
 const createError = ref('')
@@ -28,8 +31,30 @@ const targetDir = ref(store.defaultDownloadDir)
 watch(() => props.visible, (v) => {
   if (v && props.filePath) {
     resolveLink()
+    copied.value = false
   }
 })
+
+async function copyDirectLink() {
+  if (!linkResult.value?.direct_link) return
+  try {
+    await navigator.clipboard.writeText(linkResult.value.direct_link)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // fallback for insecure context
+    const ta = document.createElement('textarea')
+    ta.value = linkResult.value.direct_link
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  }
+}
 
 async function resolveLink() {
   resolving.value = true
@@ -112,24 +137,29 @@ function formatBytes(bytes: number): string {
             <template v-else-if="linkResult">
               <div class="info-row">
                 <span class="info-row__label">{{ t('download_dialog.file_name') }}</span>
-                <span class="info-row__value">{{ linkResult.Name }}</span>
+                <span class="info-row__value">{{ linkResult.name }}</span>
               </div>
               <div class="info-row">
                 <span class="info-row__label">{{ t('download_dialog.file_size') }}</span>
-                <span class="info-row__value">{{ formatBytes(linkResult.Size) }}</span>
+                <span class="info-row__value">{{ formatBytes(linkResult.size) }}</span>
               </div>
               <div class="info-row">
                 <span class="info-row__label">{{ t('download_dialog.provider') }}</span>
-                <span class="info-row__value">{{ linkResult.Provider }}</span>
+                <span class="info-row__value">{{ linkResult.provider }}</span>
               </div>
               <div class="info-row">
                 <span class="info-row__label">{{ t('download_dialog.direct_link') }}</span>
-                <code class="info-row__value truncate">{{ linkResult.DirectLink }}</code>
+                <div class="link-row">
+                  <code class="info-row__value truncate">{{ linkResult.direct_link }}</code>
+                  <button class="btn btn--copy" @click="copyDirectLink">
+                    {{ copied ? t('download_dialog.copied') : t('download_dialog.copy_link') }}
+                  </button>
+                </div>
               </div>
               <div class="info-row">
                 <span class="info-row__label">{{ t('download_dialog.proxy') }}</span>
-                <span class="badge" :class="linkResult.IsOpenListProxy ? 'badge--yes' : 'badge--no'">
-                  {{ linkResult.IsOpenListProxy ? t('download_dialog.proxy_yes') : t('download_dialog.proxy_no') }}
+                <span class="badge" :class="linkResult.is_openlist_proxy ? 'badge--yes' : 'badge--no'">
+                  {{ linkResult.is_openlist_proxy ? t('download_dialog.proxy_yes') : t('download_dialog.proxy_no') }}
                 </span>
               </div>
 
@@ -268,6 +298,16 @@ code.info-row__value {
   white-space: nowrap;
 }
 
+.link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link-row code {
+  flex: 1;
+  min-width: 0;
+}
+
 .path-input {
   width: 100%;
   padding: 10px 14px;
@@ -338,6 +378,21 @@ code.info-row__value {
 .btn--primary:hover:not(:disabled) { background: #2563eb; }
 .btn--secondary { background: white; color: #374151; border: 1px solid #d1d5db; }
 .btn--secondary:hover:not(:disabled) { background: #f9fafb; }
+.btn--copy {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn--copy:hover { background: #f3f4f6; border-color: #9ca3af; }
+.btn--copy:active { background: #e5e7eb; }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

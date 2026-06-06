@@ -9,7 +9,7 @@
     "login": "Login",
     "logout": "Logout",
     "openlist_checking": "Checking OpenList...",
-    "openlist_connected": "OpenList Connected ({count} drivers)",
+    "openlist_connected": "OpenList Connected",
     "openlist_disconnected": "OpenList Disconnected",
     "switch_to_cn": "Switch to Chinese",
     "switch_to_en": "Switch to English"
@@ -71,7 +71,7 @@
     "openlist_offline": "Offline",
     "openlist_trend_ok": "Service healthy",
     "openlist_trend_error": "Service unavailable",
-    "connected_drivers": "{count} driver(s) available",
+    "openlist_connected": "Connected",
     "api_error": "API error",
     "not_connected": "Not connected",
     "system_health": "System Health",
@@ -106,6 +106,7 @@
     "size": "Size",
     "modified": "Modified",
     "action": "Action",
+    "root_name": "Home",
     "download": "Download"
   },
   "portal": {
@@ -137,7 +138,8 @@
     "registered_success": "Registered successfully!",
     "delete_confirm": "Delete",
     "delete_success": "Deleted successfully!",
-    "delete_failed": "Delete failed, please try again"
+    "delete_failed": "Delete failed, please try again",
+    "name_exists": "A provider with this name already exists"
   },
   "provider_form": {
     "title_add": "Register Provider",
@@ -150,7 +152,7 @@
     "local_path_hint": "Uses GetDiskFreeSpaceEx to read the real total, used, and available capacity of the disk containing this path.",
     "baidu_token": "Baidu Access Token *",
     "baidu_token_placeholder": "Paste Baidu access_token",
-    "baidu_token_hint": "How to get: Open pan.baidu.com → F12 → Network → filter quota, find access_token=xxx in the request URL, copy the xxx part.",
+    "baidu_token_hint": "How to get: Verify your Baidu cloud login and fill in the corresponding Key to obtain the token.",
     "quark_cookie": "Quark Cookie *",
     "quark_cookie_placeholder": "Paste Quark cookie string",
     "quark_cookie_hint": "How to get: Open pan.quark.cn → F12 → Network → click any request → find Cookie in request headers → right-click copy value. The cookie must contain __pus and __t fields.",
@@ -158,6 +160,8 @@
     "account_id_placeholder": "For reference only",
     "account_id_hint": "Helps distinguish multiple accounts of the same type. Can be left blank.",
     "status": "Status",
+    "get_token": "Get Token",
+    "get_cookie": "Get Cookie",
     "about_quota": "About Quota",
     "baidu_notice": "After registration, create a Mount → sync quota. The BaiduProvider will use your access_token to fetch real capacity data from the Baidu API.",
     "quark_notice": "After registration, create a Mount → sync quota. The QuarkProvider will use your cookie to fetch real capacity data from the Quark API. Direct download is not supported.",
@@ -167,7 +171,7 @@
     "save": "Save",
     "register": "Register",
     "options": {
-      "generic": "Generic (Recommended)",
+      "generic": "Generic",
       "generic_desc": "Routes all operations through the OpenList API. Works with any drive configured in OpenList.",
       "baidu": "Baidu Netdisk (Direct, needs token)",
       "baidu_desc": "Dedicated Baidu backend with direct download support. Requires a Baidu access token.",
@@ -202,8 +206,11 @@
     "virtual": "Virtual",
     "virtual_desc": "Virtual capacity (specify total manually)",
     "inherit": "Inherit",
-    "inherit_desc": "Inherit parent quota (not available)",
-    "inherit_title": "Requires an existing Mount as parent, not available yet",
+    "inherit_desc": "Mirror parent mount's quota",
+    "inherit_title": "Inherit from a real-mode mount",
+    "inherit_parent": "Parent Mount",
+    "inherit_select_hint": "-- Select a mount --",
+    "inherit_no_parents": "No real-mode mounts available. Create a mount in 'real' mode first.",
     "virtual_total": "Virtual Total Capacity (MB)",
     "placeholder_gb": "e.g. 102400 (100 GB)",
     "total": "Total",
@@ -248,7 +255,17 @@
     "started": "Started",
     "finished": "Finished",
     "created": "Created",
-    "updated": "Updated"
+    "updated": "Updated",
+    "status_all": "All",
+    "status_submitted": "Submitted",
+    "status_downloading": "Downloading",
+    "status_completed": "Completed",
+    "status_failed": "Failed",
+    "status_cancelled": "Cancelled",
+    "stop_refresh": "Stop",
+    "clear_completed": "Clear All",
+    "clear_selected": "Clear",
+    "copy_link": "Copy"
   },
   "download_dialog": {
     "title": "Download Confirmation",
@@ -270,7 +287,9 @@
     "close": "Close",
     "done": "Done",
     "task_created": "Task created:",
-    "create_failed": "Create failed"
+    "create_failed": "Create failed",
+    "copy_link": "Copy Link",
+    "copied": "Copied!"
   },
   "settings": {
     "title": "Settings",
@@ -282,6 +301,7 @@
     "openlist": "OpenList",
     "openlist_url": "Base URL",
     "openlist_status": "Status",
+    "openlist_connected": "Connected",
     "openlist_disconnected": "Not connected (configure in OpenList desktop)",
     "checking_status": "Checking...",
     "api_error": "API error",
@@ -296,7 +316,13 @@
     "download_dir": "Default Download Directory",
     "dir_placeholder": "e.g. D:\\Downloads",
     "dir_hint": "Leave empty to use aria2's configured default. Changes apply to new downloads.",
-    "save": "Save"
+    "save": "Save",
+    "reset": "Reset User Data",
+    "reset_desc": "Clear all providers, mounts, download tasks, and quota data. This action cannot be undone.",
+    "reset_button": "Reset All Data",
+    "reset_confirm": "Are you sure you want to reset all user data? This will permanently delete all providers, mounts, tasks, and quota records.",
+    "reset_success": "All user data has been cleared",
+    "reset_failed": "Failed to reset user data"
   },
   "debug": {
     "title": "Debug",

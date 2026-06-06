@@ -9,3 +9,8 @@ export function userLogin(data: {
 }): Promise<ApiResponse<null>> {
   return request.post('/user/login', data)
 }
+
+// 清空所有用户数据（后端：DELETE /user/reset）
+export function userReset(): Promise<ApiResponse<null>> {
+  return request.delete('/user/reset')
+}
