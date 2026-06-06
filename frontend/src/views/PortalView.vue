@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { getDrivers } from '@/api/storage'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -10,10 +11,8 @@ const isLaunching = ref(false)
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/v1/provider/list')
-    if (res.ok) {
-      isConnected.value = true
-    }
+    const res = await getDrivers()
+    isConnected.value = res.code === 1000 || res.code === 0
   } catch {
     isConnected.value = false
   }
