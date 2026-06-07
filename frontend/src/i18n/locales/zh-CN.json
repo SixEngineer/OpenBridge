@@ -26,13 +26,13 @@
       "providers": "服务商",
       "providers_desc": "服务商管理",
       "tasks": "下载任务",
-      "tasks_desc": "下载控制中心",
+      "tasks_desc": "下载中心",
       "quota": "配额管理",
       "quota_desc": "容量监控",
       "settings": "设置",
-      "settings_desc": "策略和配置",
+      "settings_desc": "系统配置",
       "debug": "调试",
-      "debug_desc": "追踪和诊断"
+      "debug_desc": "诊断工具"
     }
   },
   "page_header": {
@@ -184,7 +184,7 @@
     "options": {
       "generic": "通用",
       "generic_desc": "所有操作通过 OpenList API 路由，适用于任何在 OpenList 中配置的网盘。",
-      "baidu": "百度网盘（直连，需要 token）",
+      "baidu": "百度网盘",
       "baidu_desc": "专用百度后端，支持直接下载。需要百度 access_token。",
       "quark": "夸克网盘",
       "quark_desc": "专用夸克后端，支持配额同步。需要夸克 Cookie。",
@@ -230,7 +230,27 @@
     "updated": "更新时间：",
     "empty_no_provider": "请先在 Providers 页面注册一个 Provider",
     "empty_create_mount": "请点击「创建 Mount 并查询配额」",
-    "empty_no_data": "暂无配额数据，请点击「查询配额」或「同步配额」"
+    "empty_no_data": "暂无配额数据，请点击「查询配额」或「同步配额」",
+    "no_mounts": "该服务商暂无挂载点，点击「创建 Mount」添加一个。",
+    "delete_mount": "删除",
+    "edit_mount": "编辑",
+    "delete_confirm_title": "删除挂载点",
+    "delete_confirm_message": "确定要删除此挂载点吗？此操作不可撤销。",
+    "delete_success": "挂载点已删除",
+    "delete_failed": "删除挂载点失败",
+    "edit_title": "编辑挂载点",
+    "edit_name": "名称",
+    "edit_virtual_total": "虚拟总容量 (MB)",
+    "edit_virtual_used": "虚拟已用量 (MB)",
+    "edit_save": "保存",
+    "edit_cancel": "取消",
+    "edit_success": "挂载点更新成功",
+    "edit_failed": "更新挂载点失败",
+    "create_new_mount": "创建 Mount",
+    "mount_name": "挂载点名称",
+    "confirm_delete": "删除",
+    "cancel": "取消",
+    "loading_mounts": "正在加载挂载点..."
   },
   "tasks": {
     "title": "下载任务",
@@ -276,7 +296,13 @@
     "stop_refresh": "停止",
     "clear_filtered": "清空当前",
     "clear_selected": "清除",
-    "copy_link": "点击复制"
+    "copy_link": "点击复制",
+    "retry_btn": "重试下载",
+    "retrying": "重试中...",
+    "retry_success": "已重新提交下载任务",
+    "retry_failed": "重试失败",
+    "open_file": "打开文件",
+    "open_file_location": "在文件夹中显示"
   },
   "download_dialog": {
     "title": "下载确认",
@@ -333,7 +359,23 @@
     "reset_button": "重置所有数据",
     "reset_confirm": "确定要重置所有用户数据吗？这将永久删除所有服务商、挂载点、任务和配额记录。",
     "reset_success": "所有用户数据已清空",
-    "reset_failed": "重置用户数据失败"
+    "reset_failed": "重置用户数据失败",
+    "user_info": "用户信息",
+    "user_info_desc": "当前已登录用户的 OpenList 个人信息",
+    "username": "用户名",
+    "user_role": "角色",
+    "user_role_admin": "管理员",
+    "user_role_user": "普通用户",
+    "user_role_guest": "访客",
+    "user_role_visitor": "游客",
+    "user_role_unknown": "未知 ({role})",
+    "base_path": "基础路径",
+    "sso_id": "SSO ID",
+    "otp_enabled": "OTP 已启用",
+    "otp_disabled": "OTP 未启用",
+    "user_disabled": "账户已禁用",
+    "user_active": "账户正常",
+    "load_error": "加载用户信息失败"
   },
   "debug": {
     "title": "调试",
@@ -365,6 +407,10 @@
     "status_active": "活跃",
     "status_disabled": "停用",
     "status_expired": "已过期",
-    "status_error": "错误"
+    "status_error": "错误",
+    "status": "状态",
+    "refresh": "刷新",
+    "retry": "重试",
+    "no_data": "暂无数据"
   }
 }

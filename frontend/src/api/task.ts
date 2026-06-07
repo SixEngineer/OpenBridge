@@ -19,3 +19,18 @@ export function resolveDirectLink(path: string): Promise<ApiResponse<DirectLinkR
 export function getTaskDetail(taskId: string): Promise<ApiResponse<DownloadTask>> {
   return request.get(`/download/tasks/${taskId}`)
 }
+
+// 重试下载任务（后端：POST /download/tasks/:id/retry）
+export function retryTask(taskId: string): Promise<ApiResponse<DownloadTask>> {
+  return request.post(`/download/tasks/${taskId}/retry`)
+}
+
+// 打开已下载的文件（后端：POST /download/tasks/:id/open）
+export function openFile(taskId: string): Promise<ApiResponse<{ file_path: string }>> {
+  return request.post(`/download/tasks/${taskId}/open`)
+}
+
+// 打开文件所在文件夹（后端：POST /download/tasks/:id/open-location）
+export function openFileLocation(taskId: string): Promise<ApiResponse<{ folder_path: string }>> {
+  return request.post(`/download/tasks/${taskId}/open-location`)
+}

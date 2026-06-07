@@ -7,7 +7,7 @@
     "title": "OpenBridge Console",
     "subtitle": "Unified control surface for providers, quota, and tasks.",
     "login": "Login",
-    "logout": "Logout",
+    "logout": "Re-login",
     "openlist_checking": "Checking OpenList...",
     "openlist_connected": "OpenList Connected",
     "openlist_disconnected": "OpenList Disconnected",
@@ -26,13 +26,13 @@
       "providers": "Providers",
       "providers_desc": "Adapter registry",
       "tasks": "Tasks",
-      "tasks_desc": "Download control center",
+      "tasks_desc": "Download center",
       "quota": "Quota",
       "quota_desc": "Capacity monitoring",
       "settings": "Settings",
-      "settings_desc": "Policy and configuration",
+      "settings_desc": "System configuration",
       "debug": "Debug",
-      "debug_desc": "Trace and diagnostics"
+      "debug_desc": "Diagnostics tools"
     }
   },
   "page_header": {
@@ -184,7 +184,7 @@
     "options": {
       "generic": "Generic",
       "generic_desc": "Routes all operations through the OpenList API. Works with any drive configured in OpenList.",
-      "baidu": "Baidu Netdisk (Direct, needs token)",
+      "baidu": "Baidu Netdisk",
       "baidu_desc": "Dedicated Baidu backend with direct download support. Requires a Baidu access token.",
       "quark": "Quark Netdisk",
       "quark_desc": "Dedicated Quark backend with quota sync support. Requires a Quark cookie.",
@@ -230,7 +230,27 @@
     "updated": "Updated:",
     "empty_no_provider": "Register a provider on the Providers page first",
     "empty_create_mount": "Click \"Create Mount & Query Quota\"",
-    "empty_no_data": "No quota data yet. Click \"Query Quota\" or \"Sync Quota\""
+    "empty_no_data": "No quota data yet. Click \"Query Quota\" or \"Sync Quota\"",
+    "no_mounts": "No mounts for this provider. Click \"Create Mount\" to add one.",
+    "delete_mount": "Delete",
+    "edit_mount": "Edit",
+    "delete_confirm_title": "Delete Mount",
+    "delete_confirm_message": "Are you sure you want to delete this mount? This action cannot be undone.",
+    "delete_success": "Mount deleted successfully",
+    "delete_failed": "Failed to delete mount",
+    "edit_title": "Edit Mount",
+    "edit_name": "Name",
+    "edit_virtual_total": "Virtual Total (MB)",
+    "edit_virtual_used": "Virtual Used (MB)",
+    "edit_save": "Save",
+    "edit_cancel": "Cancel",
+    "edit_success": "Mount updated successfully",
+    "edit_failed": "Failed to update mount",
+    "create_new_mount": "Create Mount",
+    "mount_name": "Mount Name",
+    "confirm_delete": "Delete",
+    "cancel": "Cancel",
+    "loading_mounts": "Loading mounts..."
   },
   "tasks": {
     "title": "Download Tasks",
@@ -276,7 +296,13 @@
     "stop_refresh": "Stop",
     "clear_filtered": "Clear Current",
     "clear_selected": "Clear",
-    "copy_link": "Copy"
+    "copy_link": "Copy",
+    "retry_btn": "Retry",
+    "retrying": "Retrying...",
+    "retry_success": "Task resubmitted",
+    "retry_failed": "Retry failed",
+    "open_file": "Open file",
+    "open_file_location": "Show in folder"
   },
   "download_dialog": {
     "title": "Download Confirmation",
@@ -333,7 +359,23 @@
     "reset_button": "Reset All Data",
     "reset_confirm": "Are you sure you want to reset all user data? This will permanently delete all providers, mounts, tasks, and quota records.",
     "reset_success": "All user data has been cleared",
-    "reset_failed": "Failed to reset user data"
+    "reset_failed": "Failed to reset user data",
+    "user_info": "User Info",
+    "user_info_desc": "Current logged-in user profile from OpenList",
+    "username": "Username",
+    "user_role": "Role",
+    "user_role_admin": "Admin",
+    "user_role_user": "User",
+    "user_role_guest": "Guest",
+    "user_role_visitor": "Visitor",
+    "user_role_unknown": "Unknown ({role})",
+    "base_path": "Base Path",
+    "sso_id": "SSO ID",
+    "otp_enabled": "OTP Enabled",
+    "otp_disabled": "OTP Disabled",
+    "user_disabled": "Account Disabled",
+    "user_active": "Account Active",
+    "load_error": "Failed to load user info"
   },
   "debug": {
     "title": "Debug",
@@ -365,6 +407,10 @@
     "status_active": "Active",
     "status_disabled": "Disabled",
     "status_expired": "Expired",
-    "status_error": "Error"
+    "status_error": "Error",
+    "status": "Status",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "no_data": "No data"
   }
 }

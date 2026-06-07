@@ -56,6 +56,16 @@ func (p *ProviderUseCase) DeleteProvider(id uint) error {
 	// 从Registry中注销Provider
 	p.ProviderRegistry.Unregister(providerAccount.Name)
 
+	// 级联删除该 provider 下的所有 mount 点
+	if err := p.MountRepo.DeleteMountPointsByProviderAccountID(id); err != nil {
+		return err
+	}
+
+	// 同时删除继承自该 provider 下 mount 点的所有继承 mount（清理孤儿数据）
+	if err := p.MountRepo.DeleteInheritMountPointsByParentProvider(id); err != nil {
+		return err
+	}
+
 	return p.ProviderRepo.DeleteProviderAccount(id)
 }
 

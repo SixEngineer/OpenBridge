@@ -12,7 +12,8 @@ const isLaunching = ref(false)
 onMounted(async () => {
   try {
     const res = await getDrivers()
-    isConnected.value = res.code === 1000 || res.code === 0
+    // 有驱动列表数据才算真正连接（OpenList 启动了但未登录时列表为空）
+    isConnected.value = (res.code === 1000 || res.code === 0) && Array.isArray(res.data) && res.data.length > 0
   } catch {
     isConnected.value = false
   }

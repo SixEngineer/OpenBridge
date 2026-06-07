@@ -35,6 +35,7 @@ async function handleLogin() {
     const res = await userLogin({ username: name, password: pass })
     if (res.code === 1000) {
       store.login(name)
+      await store.fetchCurrentUser()
       router.push('/dashboard')
     } else {
       errorMsg.value = (res.msg as string) || t('login.error_failed')

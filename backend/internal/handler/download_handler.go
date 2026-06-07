@@ -81,3 +81,33 @@ func (h *DownloadHandler) GetAria2Status(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: version})
 }
+
+func (h *DownloadHandler) OpenFileLocation(c *gin.Context) {
+	taskID := c.Param("id")
+	filePath, err := h.downloadUseCase.OpenFileLocation(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadOpenFailed, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: gin.H{"folder_path": filePath}})
+}
+
+func (h *DownloadHandler) OpenFile(c *gin.Context) {
+	taskID := c.Param("id")
+	filePath, err := h.downloadUseCase.OpenFile(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadOpenFailed, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: gin.H{"file_path": filePath}})
+}
+
+func (h *DownloadHandler) RetryTask(c *gin.Context) {
+	taskID := c.Param("id")
+	task, err := h.downloadUseCase.RetryTask(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadCreateFailed, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: task})
+}

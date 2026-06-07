@@ -33,11 +33,10 @@ function handleLogout() {
 async function checkOpenList() {
   try {
     const res = await getDrivers()
-    if (res.code === 1000 || res.code === 0) {
-      openListStatus.value = 'connected'
-    } else {
-      openListStatus.value = 'disconnected'
-    }
+    // 有驱动列表数据才算真正连接（OpenList 启动了但未登录时列表为空）
+    openListStatus.value = (res.code === 1000 || res.code === 0) && Array.isArray(res.data) && res.data.length > 0
+      ? 'connected'
+      : 'disconnected'
   } catch (e) {
     openListStatus.value = 'disconnected'
   }

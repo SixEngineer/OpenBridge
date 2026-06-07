@@ -119,7 +119,7 @@ function enterDir(item: any) {
 function formatSize(bytes: number): string {
   if (!bytes || bytes === 0) return '—'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }

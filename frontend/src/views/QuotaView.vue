@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
 import { useI18n } from 'vue-i18n'
+import type { MountPoint } from '@/types/mount'
+import type { QuotaInfo } from '@/types/quota'
 
 const store = useConsoleStore()
 const { t, locale } = useI18n()
@@ -13,38 +15,62 @@ async function checkBackend() {
   try {
     const res = await fetch('/api/v1/provider/list', { method: 'GET' })
     backendStatus.value = res.ok ? 'active' : 'error'
-  } catch (e: any) {
+  } catch {
     backendStatus.value = 'error'
   }
 }
 
-// Currently selected Provider ID
+// ── Provider selection ──
 const selectedProviderId = ref<number | null>(null)
+const providerDropdownOpen = ref(false)
+const dropdownRef = ref<HTMLElement | null>(null)
 
-// Currently selected Provider object
 const selectedProvider = computed(() => {
   if (selectedProviderId.value === null) return null
   return store.providers.find(p => p.id === selectedProviderId.value) ?? null
 })
 
-// Current provider's mountId (if created)
-const currentMountId = computed(() => {
-  if (selectedProviderId.value === null) return null
-  return store.mountIdByProvider[selectedProviderId.value] ?? null
+function selectProvider(id: number) {
+  selectedProviderId.value = id
+  providerDropdownOpen.value = false
+}
+
+function toggleDropdown() {
+  if (backendStatus.value !== 'error') {
+    providerDropdownOpen.value = !providerDropdownOpen.value
+  }
+}
+
+// Click outside to close
+function onDocumentClick(e: MouseEvent) {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+    providerDropdownOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick))
+
+// Auto-select first provider when list changes
+watch(() => store.providers, (list) => {
+  if (list.length > 0 && selectedProviderId.value === null) {
+    selectedProviderId.value = list[0].id
+  }
+}, { immediate: true })
+
+// ── Mounts for selected provider ──
+const providerMounts = computed(() => {
+  if (selectedProviderId.value === null) return []
+  return store.getMountsByProvider(selectedProviderId.value)
 })
 
-// Whether mount exists
-const hasMount = computed(() => currentMountId.value !== null)
-
-// Quota mode selection
+// ── Create Mount mode ──
+const showCreateForm = ref(false)
 const quotaMode = ref<'real' | 'inherit' | 'virtual'>('real')
 const virtualTotalInput = ref('')
 const virtualTotalMB = computed(() => {
   const n = parseInt(virtualTotalInput.value, 10)
   return isNaN(n) || n <= 0 ? undefined : n
 })
-
-// inherit 模式：可选父挂载点（仅 real 模式且不是当前 provider 的 mount）
 const inheritParentId = ref<number | null>(null)
 const availableParents = computed(() => {
   return store.mounts.filter(m =>
@@ -52,7 +78,145 @@ const availableParents = computed(() => {
   )
 })
 
-// Status toast
+// ── Per-mount quota cache ──
+interface MountQuotaCache {
+  quota: QuotaInfo | null
+  mode: string | null
+  extra: { inherit_chain?: number[]; virtual_config?: Record<string, number> } | null
+  loading: boolean
+}
+const mountQuotaMap = reactive<Record<number, MountQuotaCache>>({})
+
+function getMountCache(mountId: number): MountQuotaCache {
+  if (!mountQuotaMap[mountId]) {
+    mountQuotaMap[mountId] = { quota: null, mode: null, extra: null, loading: false }
+  }
+  return mountQuotaMap[mountId]
+}
+
+// ── Edit mount ──
+const editingMountId = ref<number | null>(null)
+const editForm = reactive<{ name: string; virtual_total: number; virtual_used: number }>({
+  name: '',
+  virtual_total: 0,
+  virtual_used: 0,
+})
+
+function startEdit(mount: MountPoint) {
+  editingMountId.value = mount.id
+  editForm.name = mount.name
+  editForm.virtual_total = mount.virtual_total
+  editForm.virtual_used = mount.virtual_used
+}
+
+function cancelEdit() {
+  editingMountId.value = null
+}
+
+async function handleEditSave(mountId: number) {
+  const mount = store.allMounts.find(m => m.id === mountId)
+  if (!mount) return
+  const payload: Partial<MountPoint> = { name: editForm.name }
+  if (mount.quota_mode === 'virtual') {
+    payload.virtual_total = editForm.virtual_total
+    payload.virtual_used = editForm.virtual_used
+  }
+  const result = await store.updateMountById(mountId, payload)
+  if (result) {
+    showStatus(t('quota.edit_success'))
+    editingMountId.value = null
+  } else {
+    showStatus(t('quota.edit_failed'), true)
+  }
+}
+
+// ── Delete mount ──
+const deleteConfirmId = ref<number | null>(null)
+
+function confirmDelete(mountId: number) {
+  deleteConfirmId.value = mountId
+}
+
+function cancelDelete() {
+  deleteConfirmId.value = null
+}
+
+async function handleDelete(mountId: number) {
+  const ok = await store.deleteMountById(mountId)
+  if (ok) {
+    showStatus(t('quota.delete_success'))
+    deleteConfirmId.value = null
+  } else {
+    showStatus(t('quota.delete_failed'), true)
+  }
+}
+
+// ── Sync / Query per mount ──
+async function handleSyncMount(mountId: number) {
+  const cache = getMountCache(mountId)
+  if (cache.loading) return
+  cache.loading = true
+  try {
+    const res = await store.syncQuotaByMount(mountId)
+    if (res && res.code === 1000) {
+      cache.quota = res.data.quota
+      cache.mode = res.data.mode
+      cache.extra = {
+        inherit_chain: res.data.inherit_chain,
+        virtual_config: res.data.virtual_config,
+      }
+      showStatus(t('quota.sync_success'))
+    } else {
+      showStatus((t('quota.sync_failed') + ' ' + (res?.msg || '')), true)
+    }
+  } catch {
+    showStatus(t('quota.sync_failed'), true)
+  } finally {
+    cache.loading = false
+  }
+}
+
+async function handleQueryMount(mountId: number) {
+  const cache = getMountCache(mountId)
+  if (cache.loading) return // 避免重复请求
+  cache.loading = true
+  try {
+    const res = await store.queryQuotaByMount(mountId)
+    if (res && res.code === 1000) {
+      cache.quota = res.data.quota
+      cache.mode = res.data.mode
+      cache.extra = {
+        inherit_chain: res.data.inherit_chain,
+        virtual_config: res.data.virtual_config,
+      }
+    }
+    // res.code !== 1000 或 res === null: 静默处理（mount 可能不存在，不弹错误 toast）
+  } finally {
+    cache.loading = false
+  }
+}
+
+// ── Create Mount ──
+async function handleCreateMount() {
+  const p = selectedProvider.value
+  if (!p) return
+  const rootPath = p.net_disk === 'local' ? p.account_id : undefined
+  const mount = await store.createMountForProvider(
+    p.id, p.name, p.provider_type, rootPath,
+    quotaMode.value, virtualTotalMB.value,
+    quotaMode.value === 'inherit' ? inheritParentId.value ?? undefined : undefined
+  )
+  if (mount) {
+    showStatus(t('quota.mount_created'))
+    showCreateForm.value = false
+    // Auto-query the new mount's quota
+    await handleQueryMount(mount.id)
+  } else {
+    showStatus(t('quota.mount_failed'), true)
+  }
+}
+
+// ── Status toast ──
 const statusMessage = ref('')
 const statusIsError = ref(false)
 let statusTimer: ReturnType<typeof setTimeout> | null = null
@@ -63,91 +227,62 @@ function showStatus(msg: string, isError = false) {
   statusTimer = setTimeout(() => { statusMessage.value = '' }, isError ? 5000 : 2500)
 }
 
-// Format bytes to human-readable
+// ── Formatting helpers ──
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// Backend returns quota in MB, convert to bytes then format
 function formatQuotaMB(mb: number): string {
   return formatBytes(mb * 1024 * 1024)
 }
 
-// Mock providers store values in GB but backend reports as MB
-function displayQuotaMB(mb: number): string {
+function displayQuotaMB(mb: number, mountMode?: string | null): string {
+  // 虚拟模式值就是 MB，不应用 mock 缩放
+  // 继承模式配额来自父 provider，值已经是正确单位，不额外缩放
+  if (mountMode === 'virtual' || mountMode === 'inherit') {
+    return formatQuotaMB(mb)
+  }
   const scale = selectedProvider.value?.provider_type === 'mock' ? 1024 : 1
   return formatQuotaMB(mb * scale)
 }
 
-// Locale-aware date formatting
 function formatTime(t: string | null | undefined): string {
   if (!t) return '—'
   return new Date(t).toLocaleString(locale.value)
 }
 
-// Create Mount
-async function handleCreateMount() {
-  const p = selectedProvider.value
-  if (!p) return
-  // For local storage, the path is stored in account_id
-  const rootPath = p.net_disk === 'local' ? p.account_id : undefined
-  const mount = await store.createMountForProvider(
-    p.id, p.name, p.provider_type, rootPath,
-    quotaMode.value, virtualTotalMB.value,
-    quotaMode.value === 'inherit' ? inheritParentId.value ?? undefined : undefined
-  )
-  if (mount) {
-    await store.queryQuotaByMount(mount.id)
-    showStatus(t('quota.mount_created'))
-  } else {
-    showStatus(t('quota.mount_failed'), true)
-  }
-}
+// ── Loading state ──
+const initialLoading = ref(true)
+const mountsLoaded = ref(false) // 防止 watch 在初始加载时触发查询
 
-	// Sync quota (call remote API)
-async function handleSync() {
-  if (currentMountId.value === null) return
-  const res = await store.syncQuotaByMount(currentMountId.value)
-  if (res && res.code === 1000) {
-    showStatus(t('quota.sync_success'))
-  } else {
-    showStatus(t('quota.sync_failed') + ' ' + (res?.msg || 'check console'), true)
-  }
-}
-
-// Auto-select first provider when list changes
-watch(() => store.providers, (list) => {
-  if (list.length > 0 && selectedProviderId.value === null) {
-    selectedProviderId.value = list[0].id
-  }
-}, { immediate: true })
-
-// 切换服务商时自动读取缓存配额
-watch(selectedProviderId, (id) => {
-  if (id === null) return
-  const mountId = store.mountIdByProvider[id]
-  if (mountId) {
-    store.queryQuotaByMount(mountId)
-  } else {
-    store.currentQuota = null
-    store.currentQuotaMode = null
-    store.currentQuotaExtra = null
-  }
-})
-
+// ── Lifecycle ──
 onMounted(async () => {
   await checkBackend()
   await store.fetchProviders()
-  // Auto-sync once providers are loaded
-  if (backendStatus.value === 'active' && selectedProviderId.value !== null) {
-    const mountId = store.mountIdByProvider[selectedProviderId.value]
-    if (mountId) {
-      await store.syncQuotaByMount(mountId)
-    }
+  await store.fetchAllMounts()
+  mountsLoaded.value = true
+  // 只查询当前选中 provider 的挂载点配额，并且并行执行
+  if (providerMounts.value.length > 0) {
+    await Promise.all(
+      providerMounts.value.map(mount => handleQueryMount(mount.id))
+    )
+  }
+  initialLoading.value = false
+})
+
+// When provider changes, try to load existing mount quotas
+watch(selectedProviderId, async () => {
+  // 初始加载期间不做查询 — 由 onMounted 统一处理
+  if (!mountsLoaded.value) return
+  const promises = providerMounts.value
+    .filter(mount => !getMountCache(mount.id).quota)
+    .map(mount => handleQueryMount(mount.id))
+  if (promises.length > 0) {
+    await Promise.all(promises)
   }
 })
 </script>
@@ -164,47 +299,60 @@ onMounted(async () => {
       {{ t('dashboard.backend_api_disconnected') }}
     </div>
 
-    <!-- Provider select + actions -->
+    <!-- Provider select + Create button -->
     <div class="quota-controls">
-      <select
-        v-model="selectedProviderId"
-        class="provider-select"
-        :disabled="backendStatus === 'error'"
-      >
-        <option value="" disabled>{{ t('quota.select_provider') }}</option>
-        <option
-          v-for="p in store.providers"
-          :key="p.id"
-          :value="p.id"
+      <div ref="dropdownRef" class="provider-dropdown">
+        <button
+          class="dropdown-trigger"
+          :class="{ 'dropdown-trigger--disabled': backendStatus === 'error' }"
+          @click="toggleDropdown"
         >
-          {{ p.name }} ({{ p.provider_type }})
-        </option>
-      </select>
+          <template v-if="selectedProvider">
+            <span class="dropdown-trigger__name">{{ selectedProvider.name }}</span>
+            <span class="provider-type-tag" :class="`provider-type-tag--${selectedProvider.provider_type}`">
+              {{ selectedProvider.provider_type }}
+            </span>
+          </template>
+          <span v-else class="dropdown-trigger__placeholder">{{ t('quota.select_provider') }}</span>
+          <svg class="dropdown-arrow" :class="{ 'dropdown-arrow--open': providerDropdownOpen }" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <transition name="dropdown-fade">
+          <div v-if="providerDropdownOpen" class="dropdown-panel">
+            <button
+              v-for="p in store.providers"
+              :key="p.id"
+              class="dropdown-item"
+              :class="{ 'dropdown-item--active': selectedProviderId === p.id }"
+              @click="selectProvider(p.id)"
+            >
+              <div class="dropdown-item__info">
+                <span class="dropdown-item__name">{{ p.name }}</span>
+                <span class="dropdown-item__desc">{{ p.net_disk === 'local' ? p.account_id : '' }}</span>
+              </div>
+              <span class="provider-type-tag" :class="`provider-type-tag--${p.provider_type}`">
+                {{ p.provider_type }}
+              </span>
+            </button>
+          </div>
+        </transition>
+      </div>
 
       <div class="button-group">
         <button
-          v-if="selectedProvider && !hasMount"
+          v-if="selectedProvider && store.isAdmin"
           class="btn btn--primary"
-          :disabled="store.mountCreating || backendStatus === 'error' || (quotaMode === 'virtual' && !virtualTotalMB) || (quotaMode === 'inherit' && !inheritParentId)"
-          @click="handleCreateMount"
+          :disabled="backendStatus === 'error'"
+          @click="showCreateForm = !showCreateForm"
         >
-          {{ store.mountCreating ? t('quota.creating_mount') : t('quota.create_mount') }}
+          {{ showCreateForm ? t('quota.cancel') : t('quota.create_new_mount') }}
         </button>
-
-        <template v-else-if="selectedProvider && hasMount">
-          <button
-            class="btn btn--primary"
-            :disabled="store.quotaLoading || backendStatus === 'error'"
-            @click="handleSync"
-          >
-            {{ store.quotaLoading ? t('quota.syncing') : t('quota.sync_quota') }}
-          </button>
-        </template>
       </div>
     </div>
 
-    <!-- Quota mode selection (shown before mount is created) -->
-    <div v-if="selectedProvider && !hasMount" class="mode-section">
+    <!-- Create Mount form -->
+    <div v-if="selectedProvider && showCreateForm" class="mode-section">
       <div class="mode-options">
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="real" />
@@ -250,60 +398,147 @@ onMounted(async () => {
           class="virtual-input__field"
         />
       </div>
+      <div class="create-actions">
+        <button
+          class="btn btn--primary"
+          :disabled="store.mountCreating || backendStatus === 'error' || (quotaMode === 'virtual' && !virtualTotalMB) || (quotaMode === 'inherit' && !inheritParentId)"
+          @click="handleCreateMount"
+        >
+          {{ store.mountCreating ? t('quota.creating_mount') : t('quota.create_mount') }}
+        </button>
+      </div>
     </div>
 
-    <!-- Status feedback -->
+    <!-- Initial loading spinner -->
+    <div v-if="initialLoading" class="loading-state">
+      <span class="loading-spinner"></span>
+      <p>{{ t('quota.loading_mounts') }}</p>
+    </div>
+
+    <!-- Status toast -->
     <transition name="fade">
       <div v-if="statusMessage" class="status-toast" :class="{ 'status-toast--error': statusIsError }">{{ statusMessage }}</div>
     </transition>
 
-    <!-- Quota card (stale if backend offline) -->
-    <div v-if="store.currentQuota" class="quota-card" :class="{ 'quota-card--stale': backendStatus === 'error' }">
-      <div class="quota-card__header">
-        <h3>{{ selectedProvider?.name || store.currentQuota.provider }}</h3>
-        <div class="quota-card__header-right">
-          <span v-if="store.currentQuotaMode" class="mode-badge" :class="`mode-badge--${store.currentQuotaMode}`">
-            {{ t('quota.' + store.currentQuotaMode) }}
-          </span>
-          <span v-if="store.currentQuotaExtra?.inherit_chain?.length" class="inherit-chain">
-            ← {{ store.currentQuotaExtra.inherit_chain.join(', ') }}
-          </span>
-          <span class="quota-card__time">
-            {{ t('quota.updated') }} {{ formatTime(store.currentQuota.updated_at) }}
-          </span>
+    <!-- Mount cards list -->
+    <div v-if="!initialLoading && selectedProvider && providerMounts.length > 0" class="mount-list">
+      <div
+        v-for="mount in providerMounts"
+        :key="mount.id"
+        class="mount-card"
+        :class="{ 'mount-card--stale': backendStatus === 'error' }"
+      >
+        <!-- Card header -->
+        <div class="mount-card__header">
+          <div class="mount-card__header-left">
+            <h3 class="mount-card__title">{{ mount.name }}</h3>
+            <span class="mode-badge" :class="`mode-badge--${mount.quota_mode}`">
+              {{ t('quota.' + mount.quota_mode) }}
+            </span>
+            <span v-if="getMountCache(mount.id).extra?.inherit_chain?.length" class="inherit-chain">
+              &larr; {{ getMountCache(mount.id).extra!.inherit_chain!.join(', ') }}
+            </span>
+          </div>
+          <div class="mount-card__header-right">
+            <button v-if="store.isAdmin" class="btn btn--small btn--secondary" @click="startEdit(mount)" :disabled="backendStatus === 'error'">
+              {{ t('quota.edit_mount') }}
+            </button>
+            <button v-if="store.isAdmin" class="btn btn--small btn--danger" @click="confirmDelete(mount.id)" :disabled="backendStatus === 'error'">
+              {{ t('quota.delete_mount') }}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div class="quota-stats">
-        <div class="quota-stat">
-          <span class="quota-stat__label">{{ t('quota.total') }}</span>
-          <span class="quota-stat__value">{{ displayQuotaMB(store.currentQuota.total) }}</span>
-        </div>
-        <div class="quota-stat">
-          <span class="quota-stat__label">{{ t('quota.used') }}</span>
-          <span class="quota-stat__value">{{ displayQuotaMB(store.currentQuota.used) }}</span>
-        </div>
-        <div class="quota-stat">
-          <span class="quota-stat__label">{{ t('quota.available') }}</span>
-          <span class="quota-stat__value quota-stat__value--available">
-            {{ displayQuotaMB(store.currentQuota.available) }}
-          </span>
-        </div>
-      </div>
+        <!-- Quota stats (when not editing) -->
+        <template v-if="editingMountId !== mount.id">
+          <div v-if="getMountCache(mount.id).quota" class="quota-stats">
+            <div class="quota-stat">
+              <span class="quota-stat__label">{{ t('quota.total') }}</span>
+              <span class="quota-stat__value">{{ displayQuotaMB(getMountCache(mount.id).quota!.total, getMountCache(mount.id).mode) }}</span>
+            </div>
+            <div class="quota-stat">
+              <span class="quota-stat__label">{{ t('quota.used') }}</span>
+              <span class="quota-stat__value">{{ displayQuotaMB(getMountCache(mount.id).quota!.used, getMountCache(mount.id).mode) }}</span>
+            </div>
+            <div class="quota-stat">
+              <span class="quota-stat__label">{{ t('quota.available') }}</span>
+              <span class="quota-stat__value quota-stat__value--available">
+                {{ displayQuotaMB(getMountCache(mount.id).quota!.available, getMountCache(mount.id).mode) }}
+              </span>
+            </div>
+          </div>
+          <div v-else class="quota-stats quota-stats--empty">
+            <span class="quota-empty-text">{{ t('quota.empty_no_data') }}</span>
+          </div>
 
-      <div class="quota-progress">
-        <div
-          class="quota-progress__bar"
-          :style="{ width: `${(store.currentQuota.used / store.currentQuota.total) * 100}%` }"
-        ></div>
+          <!-- Progress bar -->
+          <div v-if="getMountCache(mount.id).quota" class="quota-progress">
+            <div
+              class="quota-progress__bar"
+              :style="{ width: `${Math.min((getMountCache(mount.id).quota!.used / getMountCache(mount.id).quota!.total) * 100, 100)}%` }"
+            ></div>
+          </div>
+
+          <!-- Card footer with sync and update time -->
+          <div class="mount-card__footer">
+            <span class="quota-card__time">
+              {{ t('quota.updated') }} {{ formatTime(getMountCache(mount.id).quota?.updated_at) }}
+            </span>
+            <button
+              class="btn btn--primary"
+              :disabled="getMountCache(mount.id).loading || backendStatus === 'error'"
+              @click="handleSyncMount(mount.id)"
+            >
+              {{ getMountCache(mount.id).loading ? t('quota.syncing') : t('quota.sync_quota') }}
+            </button>
+          </div>
+        </template>
+
+        <!-- Edit form -->
+        <div v-else class="edit-form">
+          <div class="edit-field">
+            <label>{{ t('quota.edit_name') }}</label>
+            <input v-model="editForm.name" type="text" class="edit-input" />
+          </div>
+          <div v-if="mount.quota_mode === 'virtual'" class="edit-field">
+            <label>{{ t('quota.edit_virtual_total') }}</label>
+            <input v-model.number="editForm.virtual_total" type="number" min="1" class="edit-input" />
+          </div>
+          <div v-if="mount.quota_mode === 'virtual'" class="edit-field">
+            <label>{{ t('quota.edit_virtual_used') }}</label>
+            <input v-model.number="editForm.virtual_used" type="number" min="0" class="edit-input" />
+          </div>
+          <div class="edit-actions">
+            <button class="btn btn--primary" @click="handleEditSave(mount.id)">{{ t('quota.edit_save') }}</button>
+            <button class="btn btn--secondary" @click="cancelEdit()">{{ t('quota.edit_cancel') }}</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-else class="empty-state">
-      <p v-if="!selectedProvider">{{ t('quota.empty_no_provider') }}</p>
-      <p v-else-if="!hasMount">{{ t('quota.empty_create_mount') }}</p>
-      <p v-else>{{ t('quota.empty_no_data') }}</p>
+    <!-- Empty state: no provider -->
+    <div v-else-if="!initialLoading && !selectedProvider" class="empty-state">
+      <p>{{ t('quota.empty_no_provider') }}</p>
     </div>
+
+    <!-- Empty state: no mounts -->
+    <div v-else-if="!initialLoading && selectedProvider && providerMounts.length === 0 && !showCreateForm" class="empty-state">
+      <p>{{ t('quota.no_mounts') }}</p>
+    </div>
+
+    <!-- Delete confirmation dialog -->
+    <teleport to="body">
+      <div v-if="deleteConfirmId !== null" class="dialog-overlay" @mousedown.self="cancelDelete">
+        <div class="dialog">
+          <h3 class="dialog__title">{{ t('quota.delete_confirm_title') }}</h3>
+          <p class="dialog__message">{{ t('quota.delete_confirm_message') }}</p>
+          <div class="dialog__actions">
+            <button class="btn btn--danger" @click="handleDelete(deleteConfirmId)">{{ t('quota.confirm_delete') }}</button>
+            <button class="btn btn--secondary" @click="cancelDelete()">{{ t('quota.cancel') }}</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </section>
 </template>
 
@@ -319,14 +554,188 @@ onMounted(async () => {
   border: 1px solid var(--border);
 }
 
-.provider-select {
-  padding: 10px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
-  min-width: 200px;
+.provider-dropdown {
+  position: relative;
+  min-width: 240px;
+}
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
   background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
   color: var(--text);
+  transition: all 0.2s;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dropdown-trigger:hover:not(.dropdown-trigger--disabled) {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.dropdown-trigger--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dropdown-trigger__name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.dropdown-trigger__placeholder {
+  color: var(--muted);
+  flex: 1;
+}
+
+.dropdown-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.25s ease;
+}
+
+.dropdown-arrow--open {
+  transform: rotate(180deg);
+}
+
+.dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  z-index: 100;
+  max-height: 280px;
+  overflow-y: auto;
+  opacity: 1;
+}
+
+.dropdown-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.dropdown-item--active {
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
+.dropdown-item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #3b82f6;
+  border-radius: 0 3px 3px 0;
+}
+
+.dropdown-item__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dropdown-item__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.dropdown-item__desc {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Provider type tags */
+.provider-type-tag {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
+}
+.provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+.provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.12);
+  color: #f97316;
+}
+.provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+[data-theme="dark"] .provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+[data-theme="dark"] .provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+[data-theme="dark"] .provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+[data-theme="dark"] .provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+/* Dropdown transition */
+.dropdown-fade-enter-active {
+  transition: all 0.2s ease-out;
+}
+.dropdown-fade-leave-active {
+  transition: all 0.15s ease-in;
+}
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .button-group {
@@ -335,6 +744,7 @@ onMounted(async () => {
   margin-left: auto;
 }
 
+/* ── Buttons ── */
 .btn {
   padding: 10px 20px;
   border-radius: 8px;
@@ -354,7 +764,6 @@ onMounted(async () => {
   background: #3b82f6;
   color: white;
 }
-
 .btn--primary:hover:not(:disabled) {
   background: #2563eb;
 }
@@ -364,41 +773,71 @@ onMounted(async () => {
   color: var(--text);
   border: 1px solid var(--border);
 }
-
 .btn--secondary:hover:not(:disabled) {
   background: var(--surface-strong);
 }
 
-.quota-card {
+.btn--danger {
+  background: #dc2626;
+  color: white;
+}
+.btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn--small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* ── Mount list ── */
+.mount-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mount-card {
   background: var(--surface);
   border-radius: 12px;
   padding: 24px;
   border: 1px solid var(--border);
 }
 
-.quota-card__header {
+.mount-card--stale {
+  opacity: 0.7;
+}
+
+.mount-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
-.quota-card__header h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.quota-card__header-right {
+.mount-card__header-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.quota-card__time {
-  font-size: 13px;
-  color: var(--muted);
+.mount-card__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mount-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mount-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
 }
 
 .mode-badge {
@@ -412,17 +851,33 @@ onMounted(async () => {
 .mode-badge--inherit { background: #dbeafe; color: #1e40af; }
 .mode-badge--virtual { background: #fef3c7; color: #92400e; }
 
+[data-theme="dark"] .mode-badge--real { background: rgba(6,95,70,0.3); color: #6ee7b7; }
+[data-theme="dark"] .mode-badge--inherit { background: rgba(30,64,175,0.3); color: #93c5fd; }
+[data-theme="dark"] .mode-badge--virtual { background: rgba(146,64,14,0.3); color: #fcd34d; }
+
 .inherit-chain {
   font-size: 12px;
   color: var(--muted);
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
+/* ── Quota stats ── */
 .quota-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
-  margin-bottom: 24px;
+}
+
+.quota-stats--empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.quota-empty-text {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .quota-stat {
@@ -437,7 +892,7 @@ onMounted(async () => {
 }
 
 .quota-stat__value {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 600;
   color: var(--text);
 }
@@ -451,6 +906,7 @@ onMounted(async () => {
   background: var(--border);
   border-radius: 4px;
   overflow: hidden;
+  margin-top: 16px;
 }
 
 .quota-progress__bar {
@@ -460,31 +916,12 @@ onMounted(async () => {
   transition: width 0.3s;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+.quota-card__time {
+  font-size: 13px;
   color: var(--muted);
-  background: var(--surface);
-  border-radius: 12px;
-  border: 1px dashed var(--border);
 }
 
-.offline-banner {
-  padding: 12px 20px;
-  margin-bottom: 20px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.quota-card--stale {
-  opacity: 0.7;
-}
-
-/* ── Quota mode selection ── */
+/* ── Create mount form ── */
 .mode-section {
   margin-bottom: 20px;
   padding: 20px;
@@ -514,14 +951,9 @@ onMounted(async () => {
   border-color: #3b82f6;
   background: rgba(59, 130, 246, 0.08);
 }
-.mode-option:hover:not(.mode-option--disabled) {
+.mode-option:hover {
   border-color: var(--muted);
   background: var(--surface-strong);
-}
-.mode-option--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: var(--surface);
 }
 .mode-option input[type="radio"] {
   margin-top: 3px;
@@ -615,6 +1047,58 @@ onMounted(async () => {
   color: #fbbf24;
 }
 
+.create-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Edit form ── */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.edit-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+.edit-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* ── Status toast ── */
 .status-toast {
   padding: 10px 16px;
   border-radius: 8px;
@@ -622,6 +1106,7 @@ onMounted(async () => {
   color: white;
   font-size: 14px;
   text-align: center;
+  margin-bottom: 12px;
 }
 
 .status-toast--error {
@@ -635,5 +1120,98 @@ onMounted(async () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+/* ── Loading state ── */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Offline banner ── */
+.offline-banner {
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── Delete confirmation dialog ── */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 28px;
+  min-width: 360px;
+  max-width: 480px;
+  border: 1px solid var(--border);
+}
+
+.dialog__title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dialog__message {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.dialog__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 </style>

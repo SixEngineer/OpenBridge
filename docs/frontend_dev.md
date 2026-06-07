@@ -863,7 +863,222 @@ http://localhost:5173/dashboard
 
 ---
 
-## 2026-06-06 暗色模式适配与全局样式统一
+---
+
+## 2026-06-06 配额管理重构：多挂载点、虚拟配额、继承模式
+
+### 本次完成内容
+
+对配额管理页面进行了重构，从单挂载点模式扩展为多挂载点支持，新增虚拟配额和继承配额模式，同时完善了挂载点的增删改查和用户信息展示。
+
+- **后端 Mount CRUD**
+  - Repository 层新增 `DeleteMountPoint` 和 `UpdateMountPoint` 方法
+  - Usecase 层新增 `DeleteMount` 和 `UpdateMount` 方法
+  - HTTP handler 新增 `DELETE /api/v1/mount/:id` 和 `PUT /api/v1/mount/:id` 端点
+  - 后端暴露 `GET /api/v1/mount` 端点，返回所有挂载点列表（供继承模式选择父挂载点）
+
+- **前端 Store 重构**
+  - `mounts` 从单一对象改为 `mountMap`（providerId → mount[] 多对一映射）
+  - 新增 `fetchMounts` 方法，从后端 GET /api/v1/mount 加载挂载点
+  - Store 统一管理 Provider → Mount 的关联关系
+
+- **QuotaView 页面重写**
+  - 每个 Provider 下可管理多个挂载点
+  - 挂载点卡片展示：名称、配额模式标签、配额数据、操作按钮
+  - 支持创建 Mount → 选择配额模式（Real / Virtual / Inherit）
+  - Real 模式：从网盘/磁盘获取真实容量
+  - Virtual 模式：手动输入总容量（MB）
+  - Inherit 模式：选择已有的 Real 挂载点作为父挂载点，镜像其配额
+  - 支持编辑挂载点名称和虚拟配额数值
+  - 支持删除挂载点（确认弹窗）
+  - 创建和同步配额时的加载状态和结果提示
+
+- **用户信息展示**
+  - Settings 页新增用户信息卡片
+  - 展示用户名、角色（Admin/User/Guest/Visitor）、SSO ID、OTP 状态、账户状态
+  - 从 OpenList `/api/user/info` 接口获取
+
+### 涉及文件
+
+**后端新增：**
+- `backend/internal/repository/mount_repo.go`（DeleteMountPoint, UpdateMountPoint）
+- `backend/internal/usecase/mount_usecase.go`（DeleteMount, UpdateMount）
+
+**后端修改：**
+- `backend/internal/handler/mount_handler.go`（DELETE/PUT 路由处理）
+- `backend/internal/handler/download_handler.go`（OpenFileLocation 后续修复）
+- `backend/main.go`（注册新路由）
+
+**前端修改：**
+- `frontend/src/views/QuotaView.vue`（多挂载点、三种模式、编辑/删除）
+- `frontend/src/stores/console.ts`（mounts → mountMap 重构、fetchMounts）
+- `frontend/src/api/mount.ts`（新增 list/delete/update API）
+- `frontend/src/api/settings.ts`（新增 getUserInfo）
+- `frontend/src/types/mount.ts`（类型定义）
+- `frontend/src/types/user.ts`（类型定义）
+- `frontend/src/views/SettingsView.vue`（用户信息卡片）
+- `frontend/src/i18n/locales/zh-CN.json`
+- `frontend/src/i18n/locales/en.json`
+
+### 当前状态
+
+- 配额管理支持 Real / Virtual / Inherit 三种模式
+- 每个 Provider 可管理多个挂载点
+- 挂载点支持在线编辑和删除
+- 用户信息已集成到设置页面
+
+### 后续待做
+
+- Inherit 模式链式继承校验（防止循环引用）
+- 配额同步进度反馈优化
+
+---
+
+## 2026-06-06 管理员权限中间件
+
+### 本次完成内容
+
+为后端添加管理员权限中间件，前端配合实现基于角色的权限控制。
+
+- **后端中间件**
+  - 新增 `internal/api/middleware/admin_checker.go`，通过 OpenList `/api/user/info` 验证当前用户角色
+  - 定义 `AdminRole` 常量，要求用户 role 为 `"admin"`
+  - 非管理员返回 403 + 错误码 `ErrorCodeForbidden = 1008`
+  - 中间件挂载在需要管理员权限的路由上
+
+- **前端权限控制**
+  - Pinia store 持久化用户角色（`userRole`）
+  - 新增 `isAdmin` getter
+  - 登录成功后将角色写入 store
+  - ProviderView：非管理员隐藏注册按钮
+  - QuotaView：非管理员隐藏创建 Mount / 删除 / 同步按钮
+  - ProviderFormDialog：非管理员隐藏编辑按钮
+
+### 涉及文件
+
+**后端新增：**
+- `backend/internal/api/middleware/admin_checker.go`
+
+**后端修改：**
+- `backend/main.go`（挂载中间件到路由）
+
+**前端修改：**
+- `frontend/src/stores/console.ts`（userRole / isAdmin）
+- `frontend/src/views/ProviderView.vue`
+- `frontend/src/views/QuotaView.vue`
+- `frontend/src/components/provider/ProviderFormDialog.vue`
+
+### 当前状态
+
+- 管理员权限系统前后端已打通
+- 非管理员无法执行破坏性操作（注册/删除/编辑 Provider 和 Mount）
+
+---
+
+## 2026-06-07 配额图表替换为环形图
+
+### 本次完成内容
+
+将配额管理页面的进度条替换为 SVG 环形图（donut chart），视觉表现更清晰。
+
+- **DonutChart 组件**
+  - 纯 SVG 实现，无第三方依赖
+  - 显示已用量百分比（居中文字）
+  - 支持多段着色环（已用/可用）
+  - 浅色/暗色主题自适应
+
+- **QuotaView 集成**
+  - 挂载点卡片内的配额进度条改为 DonutChart
+  - 卡片下方仍保留文字数值（已用/总量）
+
+### 涉及文件
+
+- `frontend/src/components/quota/DonutChart.vue`（新增）
+- `frontend/src/views/QuotaView.vue`
+
+---
+
+## 2026-06-07 下载任务重试与打开文件功能
+
+### 本次完成内容
+
+为下载任务列表增加重试（失败任务）和打开文件/定位文件夹（已完成任务）功能，同时修复了多项 UI 问题。
+
+- **重试功能**
+  - 后端：`POST /download/tasks/:id/retry` 重新提交 aria2 下载
+  - 修复原 RetryTask bug：AddURI 和 AddURIWithOptions 重复调用问题
+  - 前端：失败状态的任务在日期右侧显示重试按钮
+  - 重试按钮适配暗色主题
+  - API 层新增 `retryTask()` 接口
+
+- **打开文件 / 在文件夹中显示**
+  - 后端：
+    - 新增 `OpenFile`（调用系统默认应用打开文件）
+    - 新增 `OpenFileLocation`（在文件管理器中定位文件）
+    - 新增 `getActualFilePath` 辅助函数：优先从 aria2 tellStatus 获取 `files[0].path`，降级使用 `DownloadDir + FileName` 拼接
+    - 修复 Windows 路径格式：使用 `filepath.FromSlash` 将 aria2 返回的正斜杠路径（`D:/Downloads/file.zip`）转换为 Windows 反斜杠格式（`D:\Downloads\file.zip`）
+    - 修复 explorer 命令：直接调用 `explorer /select,path`，不通过 `cmd /c` 中转
+  - 前端：已完成任务的 action 列显示两个图标
+    - 文档图标 → 打开文件
+    - 文件夹图标 → 在文件夹中显示
+    - 自定义 CSS tooltip（`data-tooltip` + `::after` 伪元素，悬停立即显示）
+    - API 层新增 `openFile()` 和 `openFileLocation()` 接口
+
+- **同时修复的问题**
+  - 修复 v-for 作用域变量 `t` 遮蔽 i18n `t()` 方法的问题（改用 `$t()`）
+  - 修复自定义 tooltip 因 `overflow: hidden` 被裁剪的问题
+  - 修复表格表头（居中）与数据列（左对齐）不一致的问题
+  - 前端 fetchAllTasks 清理 store 中已失效的任务 ID，避免 `record not found` 400 错误
+
+### 涉及文件
+
+**后端：**
+- `backend/internal/usecase/download_usecase.go`（RetryTask 修复、OpenFile、OpenFileLocation、getActualFilePath、filepath.FromSlash）
+- `backend/internal/handler/download_handler.go`（新增路由处理）
+- `backend/internal/pkg/myerror/error_code.go`（新增 ErrorCodeDownloadOpenFailed）
+- `backend/main.go`（注册 /open 和 /open-location 路由）
+
+**前端：**
+- `frontend/src/views/DownloadTasksView.vue`（重试按钮、打开文件图标、tooltip、对齐修复）
+- `frontend/src/api/task.ts`（retryTask、openFile、openFileLocation）
+- `frontend/src/i18n/locales/en.json`（retry/open 文案，logout → Re-login）
+- `frontend/src/i18n/locales/zh-CN.json`
+
+### 当前状态
+
+- 失败任务可一键重试
+- 已完成任务可直接打开文件或在文件夹中定位
+- 打开文件/定位文件夹均从 aria2 获取真实路径，路径格式已修复 Windows 兼容性
+- 自定义 tooltip 悬停即显，暗色主题适配
+
+---
+
+## 2026-06-07 暗色模式补充：Quota 页面硬编码颜色修复
+
+### 本次完成内容
+
+修复暗色模式下 Quota 页面的几处硬编码黑白颜色，包括 Select 组件、空状态提示等。
+
+### 涉及文件
+
+- `frontend/src/views/QuotaView.vue`
+
+### 当前状态
+
+- 所有页面的暗色模式已无残留硬编码颜色
+
+---
+
+## 2026-06-07 开发日志（本文件）
+
+### 本次完成内容
+
+- 补充本次会话开发日志到 `docs/frontend_dev.md`
+
+### 后续待做
+
+- 继续下载任务详情面板的响应式布局优化
+- aria2 重连机制（aria2 重启后自动恢复状态同步）
 
 ### 本次完成内容
 

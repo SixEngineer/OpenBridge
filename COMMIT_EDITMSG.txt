@@ -1,0 +1,14 @@
+feat: 多挂载点配额管理、管理员权限系统、下载重试与打开文件、环形图、暗色模式修复
+
+- 配额管理重构：支持多挂载点、Real/Virtual/Inherit 三种模式、挂载点编辑/删除
+- 后端新增 Mount CRUD API（DELETE/PUT /api/v1/mount/:id, GET /api/v1/mount）
+- 管理员权限中间件（AdminChecker），前后端权限联动，非管理员隐藏操作按钮
+- 用户信息展示（Settings 页面，从 OpenList 获取角色/SSO/OTP 状态）
+- 下载任务重试功能（失败状态一键重试，修复后端 RetryTask 重复 AddURI bug）
+- 打开文件 / 在文件夹中显示（aria2 tellStatus 真实路径 + filepath.FromSlash Windows 兼容修复）
+- 配额图表替换为 SVG 环形图（纯 SVG 无依赖，自适应暗色主题）
+- Quota 页面暗色模式硬编码颜色修复
+- 自定义 CSS tooltip、表格对齐、v-for 遮蔽 t() 修复、tooltip overflow 裁剪修复
+- 前端 fetchAllTasks 清理失效任务 ID，避免 record not found 400 错误
+- 英文 logout 文案 Logout → Re-login
+- 更新 docs/frontend_dev.md 开发日志

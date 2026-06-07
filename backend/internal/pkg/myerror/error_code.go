@@ -57,4 +57,9 @@ const (
 
 	ErrorCodeGetUserInfoFailed = 1025 // 获取用户信息失败
 
+	ErrorCodeMountDeleteFailed = 1026 // Mount 删除失败
+	ErrorCodeMountUpdateFailed = 1027 // Mount 更新失败
+
+	ErrorCodeForbidden = 1028 // 权限不足
+	ErrorCodeDownloadOpenFailed = 1029 // 打开下载文件失败
 )

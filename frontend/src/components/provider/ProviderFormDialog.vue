@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProviderRecord } from '@/types/provider'
 
@@ -16,6 +16,26 @@ const emit = defineEmits<{
 }>()
 
 const localPath = ref('C:\\')
+const netDiskOpen = ref(false)
+const dropdownRef = ref<HTMLElement | null>(null)
+
+function toggleNetDisk() {
+  netDiskOpen.value = !netDiskOpen.value
+}
+
+function selectNetDisk(value: string) {
+  formData.value.net_disk = value
+  netDiskOpen.value = false
+}
+
+// Click outside to close
+function onDocumentClick(e: MouseEvent) {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+    netDiskOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 const formData = ref<Partial<ProviderRecord>>({
   name: '',
@@ -77,6 +97,24 @@ watch(() => props.provider, (val) => {
   }
 }, { immediate: true })
 
+// 每次打开新增弹窗时重置表单（provider 为 null 时 watch 不会重复触发）
+watch(() => props.visible, (v) => {
+  if (v && !props.provider) {
+    formData.value = {
+      name: '',
+      net_disk: 'mock',
+      account_id: '',
+      access_token: '',
+      auth_cookie: '',
+      status: 'active',
+      total_quota: 0,
+      used_quota: 0,
+      available_quota: 0
+    }
+    localPath.value = 'C:\\'
+  }
+})
+
 function handleClose() {
   emit('update:visible', false)
 }
@@ -96,7 +134,7 @@ function handleSubmit() {
 </script>
 
 <template>
-  <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
+  <div v-if="visible" class="dialog-overlay" @mousedown.self="handleClose">
     <div class="dialog">
       <div class="dialog__header">
         <h3>{{ provider ? t('provider_form.title_edit') : t('provider_form.title_add') }}</h3>
@@ -111,11 +149,38 @@ function handleSubmit() {
 
         <div class="form-group">
           <label>{{ t('provider_form.backend_type') }}</label>
-          <select v-model="formData.net_disk">
-            <option v-for="opt in netDiskOptions" :key="opt.value" :value="opt.value">
-              {{ t(opt.labelKey) }}
-            </option>
-          </select>
+          <div ref="dropdownRef" class="cdropdown">
+            <button
+              class="cdropdown__trigger"
+              :class="{ 'cdropdown__trigger--open': netDiskOpen }"
+              type="button"
+              @click.prevent="toggleNetDisk"
+            >
+              <span class="provider-type-tag" :class="`provider-type-tag--${formData.net_disk}`">
+                {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.labelKey || '') }}
+              </span>
+              <svg class="cdropdown__arrow" :class="{ 'cdropdown__arrow--open': netDiskOpen }" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <transition name="fade">
+              <div v-if="netDiskOpen" class="cdropdown__panel">
+                <button
+                  v-for="opt in netDiskOptions"
+                  :key="opt.value"
+                  class="cdropdown__item"
+                  :class="{ 'cdropdown__item--active': formData.net_disk === opt.value }"
+                  type="button"
+                  @click.prevent="selectNetDisk(opt.value)"
+                >
+                  <span class="provider-type-tag" :class="`provider-type-tag--${opt.value}`">
+                    {{ t(opt.labelKey) }}
+                  </span>
+                  <span class="cdropdown__item-desc">{{ t(opt.descKey) }}</span>
+                </button>
+              </div>
+            </transition>
+          </div>
           <small class="type-hint">
             {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.descKey || '') }}
           </small>
@@ -310,6 +375,145 @@ function handleSubmit() {
 
 .type-hint {
   font-style: italic;
+}
+
+/* ── Custom dropdown ── */
+.cdropdown {
+  position: relative;
+}
+
+.cdropdown__trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  transition: all 0.2s;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cdropdown__trigger:hover,
+.cdropdown__trigger--open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(91, 192, 190, 0.15);
+}
+
+.cdropdown__arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  margin-left: auto;
+  transition: transform 0.25s ease;
+}
+
+.cdropdown__arrow--open {
+  transform: rotate(180deg);
+}
+
+.cdropdown__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.cdropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.cdropdown__item:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.cdropdown__item--active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.cdropdown__item-desc {
+  font-size: 12px;
+  color: var(--muted);
+  flex: 1;
+  text-align: right;
+}
+
+/* Provider type tags */
+.provider-type-tag {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
+}
+.provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+.provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.12);
+  color: #f97316;
+}
+.provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+[data-theme="dark"] .provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+[data-theme="dark"] .provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+[data-theme="dark"] .provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+[data-theme="dark"] .provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+/* Fade transition */
+.fade-enter-active {
+  transition: all 0.15s ease-out;
+}
+.fade-leave-active {
+  transition: all 0.1s ease-in;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .notice {

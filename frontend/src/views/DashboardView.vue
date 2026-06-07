@@ -44,11 +44,18 @@ function selectPrimaryProvider(id: number) {
   primaryProviderId.value = id
 }
 
+function usedPercent(used: number, total: number): number {
+  if (total <= 0) return 0
+  const pct = Math.round((used / total) * 100)
+  if (pct === 0 && used > 0) return 1
+  return Math.min(pct, 100)
+}
+
 function formatBytes(mb: number): string {
   if (mb === 0) return '0 GB'
   const bytes = mb * 1024 * 1024
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
@@ -64,7 +71,7 @@ const metricCards = computed<MetricCardData[]>(() => [
   },
   {
     title: t('dashboard.active_mounts'),
-    value: String(Object.keys(store.mountIdByProvider).length).padStart(2, '0'),
+    value: String(store.allMounts.length).padStart(2, '0'),
     detail: t('dashboard.active_mounts_detail'),
     trend: '',
   },
@@ -136,6 +143,7 @@ async function checkBackend() {
 
 onMounted(() => {
   store.fetchProviders()
+  store.fetchAllMounts()
   checkBackend()
   checkAria2()
 })
@@ -173,27 +181,38 @@ onMounted(() => {
           >
             <div class="quota-provider-card__top">
               <span class="quota-provider-card__name">{{ p.name }}</span>
-              <span class="quota-provider-card__type">{{ p.provider_type }}</span>
+              <span class="provider-type-tag" :class="`provider-type-tag--${p.provider_type}`">{{ p.provider_type }}</span>
             </div>
-            <div class="quota-provider-card__stats">
-              <div class="qstat">
-                <span class="qstat__label">{{ t('quota.total') }}</span>
-                <span class="qstat__value">{{ formatBytes(p.total_quota) }}</span>
+            <div class="quota-provider-card__body">
+              <div class="quota-provider-card__chart-wrap">
+                <svg viewBox="0 0 36 36" class="donut">
+                  <path
+                    class="donut__bg"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 0 0 31.831 a 15.9155 15.9155 0 0 0 0 -31.831"
+                  />
+                  <path
+                    class="donut__fill"
+                    stroke="#10b981"
+                    :stroke-dasharray="`${usedPercent(p.used_quota, p.total_quota)} ${100 - usedPercent(p.used_quota, p.total_quota)}`"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 0 0 31.831 a 15.9155 15.9155 0 0 0 0 -31.831"
+                  />
+                  <text x="18" y="17.5" class="donut__text">{{ usedPercent(p.used_quota, p.total_quota) }}%</text>
+                </svg>
               </div>
-              <div class="qstat">
-                <span class="qstat__label">{{ t('quota.used') }}</span>
-                <span class="qstat__value">{{ formatBytes(p.used_quota) }}</span>
+              <div class="quota-provider-card__stats">
+                <div class="qstat">
+                  <span class="qstat__label">{{ t('quota.total') }}</span>
+                  <span class="qstat__value">{{ formatBytes(p.total_quota) }}</span>
+                </div>
+                <div class="qstat">
+                  <span class="qstat__label">{{ t('quota.used') }}</span>
+                  <span class="qstat__value">{{ formatBytes(p.used_quota) }}</span>
+                </div>
+                <div class="qstat">
+                  <span class="qstat__label">{{ t('quota.available') }}</span>
+                  <span class="qstat__value qstat__value--available">{{ formatBytes(p.available_quota) }}</span>
+                </div>
               </div>
-              <div class="qstat">
-                <span class="qstat__label">{{ t('quota.available') }}</span>
-                <span class="qstat__value qstat__value--available">{{ formatBytes(p.available_quota) }}</span>
-              </div>
-            </div>
-            <div class="quota-provider-card__bar">
-              <div
-                class="quota-provider-card__bar-fill"
-                :style="{ width: `${(p.used_quota / p.total_quota) * 100}%` }"
-              ></div>
             </div>
           </div>
         </div>
@@ -214,7 +233,7 @@ onMounted(() => {
           >
             <div class="quota-provider-card__top">
               <span class="quota-provider-card__name">{{ m.name }}</span>
-              <span class="quota-provider-card__type">{{ m.mode }}</span>
+              <span class="mount-mode-badge" :class="`mount-mode-badge--${m.mode}`">{{ m.mode }}</span>
             </div>
             <div class="quota-provider-card__stats" style="grid-template-columns: 1fr;">
               <div class="qstat">
@@ -408,55 +427,149 @@ onMounted(() => {
   color: var(--text);
 }
 
-.quota-provider-card__type {
+/* Provider type color tags */
+.provider-type-tag {
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
+}
+.provider-type-tag--baidu {
   background: rgba(59, 130, 246, 0.12);
   color: #3b82f6;
+}
+.provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.12);
+  color: #f97316;
+}
+.provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+[data-theme="dark"] .provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+[data-theme="dark"] .provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+[data-theme="dark"] .provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+[data-theme="dark"] .provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+/* Mount mode badges (active mounts expand section) */
+.mount-mode-badge {
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 600;
+}
+.mount-mode-badge--real {
+  background: #d1fae5;
+  color: #065f46;
+}
+.mount-mode-badge--inherit {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.mount-mode-badge--virtual {
+  background: #fef3c7;
+  color: #92400e;
+}
+[data-theme="dark"] .mount-mode-badge--real {
+  background: rgba(6,95,70,0.3);
+  color: #6ee7b7;
+}
+[data-theme="dark"] .mount-mode-badge--inherit {
+  background: rgba(30,64,175,0.3);
+  color: #93c5fd;
+}
+[data-theme="dark"] .mount-mode-badge--virtual {
+  background: rgba(146,64,14,0.3);
+  color: #fcd34d;
+}
+
+.quota-provider-card__body {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.quota-provider-card__chart-wrap {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+}
+
+.donut {
+  width: 100%;
+  height: 100%;
+}
+
+.donut__bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 4;
+}
+
+.donut__fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.donut__text {
+  fill: var(--text);
+  font-size: 7.5px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-weight: 700;
 }
 
 .quota-provider-card__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .qstat {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .qstat__label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .qstat__value {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  text-align: right;
 }
 
 .qstat__value--available {
   color: #10b981;
-}
-
-.quota-provider-card__bar {
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.quota-provider-card__bar-fill {
-  height: 100%;
-  background: #3b82f6;
-  border-radius: 3px;
-  transition: width 0.3s;
 }
 
 .btn--sm {

@@ -106,7 +106,7 @@ function handleClose() {
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '—'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
@@ -115,7 +115,7 @@ function formatBytes(bytes: number): string {
 <template>
   <Teleport to="body">
     <transition name="fade">
-      <div v-if="visible" class="overlay" @click.self="handleClose">
+      <div v-if="visible" class="overlay" @mousedown.self="handleClose">
         <div class="dialog">
           <div class="dialog__header">
             <h3>{{ t('download_dialog.title') }}</h3>
@@ -222,7 +222,7 @@ function formatBytes(bytes: number): string {
 }
 
 .dialog {
-  background: white;
+  background: var(--surface-strong);
   border-radius: 12px;
   width: 520px;
   max-width: 90vw;
@@ -240,18 +240,19 @@ function formatBytes(bytes: number): string {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .dialog__close {
   background: none;
   border: none;
   font-size: 24px;
-  color: #9ca3af;
+  color: var(--muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
 }
-.dialog__close:hover { color: #374151; background: #f3f4f6; }
+.dialog__close:hover { color: var(--text); background: var(--surface); }
 
 .dialog__body {
   padding: 20px 24px;
@@ -274,18 +275,18 @@ function formatBytes(bytes: number): string {
 .info-row__label {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .info-row__value {
   font-size: 14px;
-  color: #111827;
+  color: var(--text);
 }
 
 code.info-row__value {
-  background: #f3f4f6;
+  background: var(--surface);
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 13px;
@@ -311,14 +312,16 @@ code.info-row__value {
 .path-input {
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
+  background: var(--surface);
+  color: var(--text);
   transition: border-color 0.2s;
 }
-.path-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+.path-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(91, 192, 190, 0.15); }
 
 .badge {
   display: inline-block;
@@ -330,11 +333,13 @@ code.info-row__value {
 }
 .badge--yes { background: #fef3c7; color: #92400e; }
 .badge--no  { background: #d1fae5; color: #065f46; }
+[data-theme="dark"] .badge--yes { background: rgba(146,64,14,0.3); color: #fcd34d; }
+[data-theme="dark"] .badge--no  { background: rgba(6,95,70,0.3); color: #6ee7b7; }
 
 .state-hint {
   text-align: center;
   padding: 24px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -343,18 +348,22 @@ code.info-row__value {
   border-radius: 8px;
   font-size: 14px;
 }
-.msg--error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.msg--error { background: rgba(239, 68, 68, 0.1); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.3); }
 
 .success-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #d1fae5;
+  background: rgba(6, 95, 70, 0.1);
   color: #065f46;
   border-radius: 8px;
   font-size: 14px;
   margin-top: 12px;
+}
+[data-theme="dark"] .success-row {
+  background: rgba(6, 95, 70, 0.25);
+  color: #6ee7b7;
 }
 .success-icon { font-size: 18px; font-weight: 700; }
 .success-row code {
@@ -362,6 +371,9 @@ code.info-row__value {
   background: rgba(0,0,0,0.06);
   padding: 2px 8px;
   border-radius: 4px;
+}
+[data-theme="dark"] .success-row code {
+  background: rgba(255,255,255,0.1);
 }
 
 .btn {
@@ -376,23 +388,22 @@ code.info-row__value {
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn--primary { background: #3b82f6; color: white; }
 .btn--primary:hover:not(:disabled) { background: #2563eb; }
-.btn--secondary { background: white; color: #374151; border: 1px solid #d1d5db; }
-.btn--secondary:hover:not(:disabled) { background: #f9fafb; }
+.btn--secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn--secondary:hover:not(:disabled) { background: var(--surface-strong); }
 .btn--copy {
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   white-space: nowrap;
   transition: all 0.2s;
   flex-shrink: 0;
 }
-.btn--copy:hover { background: #f3f4f6; border-color: #9ca3af; }
-.btn--copy:active { background: #e5e7eb; }
+.btn--copy:hover { background: var(--surface-strong); }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }

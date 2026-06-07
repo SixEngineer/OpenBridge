@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -94,12 +97,140 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 		}
 		u.downloadRepo.UpdateTask(task)
 	} else if strings.Contains(err.Error(), "not found") && task.Status != "complete" {
-		// GID not found in aria2 → task was removed or expired → mark as error.
+		// GID not found in aria2 -> task was removed or expired -> mark as error.
 		task.Status = "error"
 		u.downloadRepo.UpdateTask(task)
 	} // Network errors (aria2 unreachable) or already complete: keep current DB status.
 
 	return task, nil
+}
+
+func (u *DownloadUseCase) RetryTask(taskID string) (*entity.DownloadTask, error) {
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+		return nil, errors.New("task not found")
+	}
+
+	directLink, err := u.storageUseCase.ResolveDirectLink(task.SourcePath)
+	if err != nil {
+		return nil, err
+	}
+
+	options := map[string]interface{}{}
+	targetDir := strings.TrimSpace(u.config.Aria2.DownloadDir)
+	if targetDir != "" {
+		options["dir"] = targetDir
+	}
+
+	gid := ""
+	if len(options) == 0 {
+		gid, err = u.aria2Client.AddURI(directLink.DirectLink)
+	} else {
+		gid, err = u.aria2Client.AddURIWithOptions(directLink.DirectLink, options)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	task.DirectLink = directLink.DirectLink
+	task.FileName = directLink.Name
+	task.FileSize = directLink.Size
+	task.Aria2GID = gid
+	task.Status = "waiting"
+	task.ErrorMessage = ""
+	task.RetryCount++
+	task.StartedAt = nil
+	task.FinishedAt = nil
+	task.UpdatedAt = now
+
+	if err := u.downloadRepo.UpdateTask(task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, error) {
+	// 优先从 aria2 tellStatus 获取真实文件路径
+	status, err := u.aria2Client.TellStatus(task.Aria2GID)
+	if err == nil {
+		if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
+			if f, ok := files[0].(map[string]interface{}); ok {
+				if path, ok := f["path"].(string); ok && path != "" {
+					return filepath.FromSlash(path), nil
+				}
+			}
+		}
+	}
+
+	// 降级：使用 config.DownloadDir + FileName 拼接
+	if task.FileName != "" && u.config.Aria2.DownloadDir != "" {
+		return filepath.Join(u.config.Aria2.DownloadDir, task.FileName), nil
+	}
+
+	return "", errors.New("cannot determine file path")
+}
+
+func (u *DownloadUseCase) OpenFile(taskID string) (string, error) {
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+		return "", errors.New("task not found")
+	}
+	if task.Status != "complete" {
+		return "", errors.New("task not completed")
+	}
+
+	filePath, err := u.getActualFilePath(task)
+	if err != nil {
+		return "", err
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", filePath)
+	case "darwin":
+		cmd = exec.Command("open", filePath)
+	default:
+		cmd = exec.Command("xdg-open", filePath)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", errors.New("failed to open file: " + err.Error())
+	}
+
+	return filePath, nil
+}
+
+func (u *DownloadUseCase) OpenFileLocation(taskID string) (string, error) {
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+		return "", errors.New("task not found")
+	}
+	if task.Status != "complete" {
+		return "", errors.New("task not completed")
+	}
+
+	filePath, err := u.getActualFilePath(task)
+	if err != nil {
+		return "", err
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", "/select,"+filePath)
+	case "darwin":
+		cmd = exec.Command("open", "-R", filePath)
+	default:
+		cmd = exec.Command("xdg-open", filepath.Dir(filePath))
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", errors.New("failed to open file location: " + err.Error())
+	}
+
+	return filepath.Dir(filePath), nil
 }
 
 func (u *DownloadUseCase) CheckAria2Status() (map[string]interface{}, error) {

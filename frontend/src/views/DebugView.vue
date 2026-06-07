@@ -44,6 +44,7 @@ async function handleReset() {
   try {
     await userReset()
     store.fetchProviders()
+    store.fetchAllMounts()
     confirmReset.value = false
     alert(t('settings.reset_success'))
   } catch (e: any) {
@@ -143,7 +144,7 @@ async function handleReset() {
       </section>
 
       <!-- Reset Data -->
-      <section class="panel panel--danger">
+      <section v-if="store.isAdmin" class="panel panel--danger">
         <div class="panel__header">
           <h3>{{ t('settings.reset') }}</h3>
           <p>{{ t('settings.reset_desc') }}</p>

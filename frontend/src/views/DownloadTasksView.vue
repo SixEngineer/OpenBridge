@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'v
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
-import { getTaskDetail } from '@/api/task'
+import { getTaskDetail, retryTask, openFile, openFileLocation } from '@/api/task'
 import type { DownloadTask } from '@/types/download'
 
 const { t, locale } = useI18n()
@@ -123,15 +123,21 @@ async function fetchAllTasks() {
   listLoading.value = true
   listError.value = ''
   const results: DownloadTask[] = []
+  const staleIds: string[] = []
   for (const id of ids) {
     try {
       const res = await getTaskDetail(id)
       if (res.code === 1000) {
         results.push(res.data)
+      } else {
+        staleIds.push(id)
       }
     } catch {
-      // Skip individual failures
+      staleIds.push(id)
     }
+  }
+  for (const id of staleIds) {
+    store.removeTaskId(id)
   }
   tasks.value = results
   listLoading.value = false
@@ -265,6 +271,56 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
+// ── Retry ──
+const retryingId = ref<string | null>(null)
+
+async function handleRetry(taskId: string) {
+  retryingId.value = taskId
+  try {
+    const res = await retryTask(taskId)
+    if (res.code === 1000) {
+      await fetchAllTasks()
+    } else {
+      console.error('retry failed:', res.msg)
+    }
+  } catch (e: any) {
+    console.error('retry error:', e?.message)
+  } finally {
+    retryingId.value = null
+  }
+}
+
+// ── Open file ──
+const openingId = ref<string | null>(null)
+
+async function handleOpenFile(taskId: string) {
+  openingId.value = taskId
+  try {
+    const res = await openFile(taskId)
+    if (res.code !== 1000) {
+      console.error('open file failed:', res.msg)
+    }
+  } catch (e: any) {
+    console.error('open file error:', e?.message)
+  } finally {
+    openingId.value = null
+  }
+}
+
+async function handleOpenFileLocation(taskId: string) {
+  openingId.value = taskId
+  try {
+    const res = await openFileLocation(taskId)
+    if (res.code !== 1000) {
+      console.error('open file location failed:', res.msg)
+    }
+  } catch (e: any) {
+    console.error('open file location error:', e?.message)
+  } finally {
+    openingId.value = null
+  }
+}
+
 // ── Utilities ──
 const copiedLinkId = ref<string | null>(null)
 
@@ -277,7 +333,7 @@ function copyDirectLink(link: string, taskId: string) {
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
@@ -411,15 +467,43 @@ function formatTime(t: string | null | undefined): string {
         </span>
         <span class="task-row__name" :title="t.FileName">
           <span class="task-row__name-text">{{ t.FileName || t.SourcePath }}</span>
-          <span class="task-row__delete" @click.stop="handleDelete(t.TaskID)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          <span class="task-row__actions">
+            <span
+              v-if="normalizeStatus(t.Status) === 'complete'"
+              class="task-row__open"
+              :class="{ 'task-row__open--loading': openingId === t.TaskID }"
+              @click.stop="handleOpenFile(t.TaskID)"
+              data-tooltip="打开文件"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </span>
+            <span
+              v-if="normalizeStatus(t.Status) === 'complete'"
+              class="task-row__open"
+              :class="{ 'task-row__open--loading': openingId === t.TaskID }"
+              @click.stop="handleOpenFileLocation(t.TaskID)"
+              data-tooltip="在文件夹中显示"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span class="task-row__delete" @click.stop="handleDelete(t.TaskID)" data-tooltip="清除记录">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </span>
           </span>
         </span>
         <span class="task-row__size">{{ formatBytes(t.FileSize) }}</span>
         <span class="task-row__status">
           <span class="badge" :class="badgeClass(t.Status)">{{ statusLabel(t.Status) }}</span>
         </span>
-        <span class="task-row__time">{{ formatTime(statusFilter === 'complete' ? t.FinishedAt : t.CreatedAt) }}</span>
+        <span class="task-row__time">
+          <span>{{ formatTime(statusFilter === 'complete' ? t.FinishedAt : t.CreatedAt) }}</span>
+          <button
+            v-if="normalizeStatus(t.Status) === 'error'"
+            class="btn btn--retry"
+            :disabled="retryingId === t.TaskID"
+            @click.stop="handleRetry(t.TaskID)"
+          >{{ retryingId === t.TaskID ? $t('tasks.retrying') : $t('tasks.retry_btn') }}</button>
+        </span>
       </div>
     </div>
 
@@ -474,6 +558,14 @@ function formatTime(t: string | null | undefined): string {
           <div class="detail-field" v-if="selectedTask.ErrorMessage">
             <span class="detail-field__label">{{ t('tasks.error') }}</span>
             <span class="text--error">{{ selectedTask.ErrorMessage }}</span>
+          </div>
+          <div class="detail-field" v-if="normalizeStatus(selectedTask.Status) === 'error'">
+            <span class="detail-field__label">{{ t('tasks.retry_btn') }}</span>
+            <button
+              class="btn btn--retry"
+              :disabled="retryingId === selectedTask.TaskID"
+              @click="handleRetry(selectedTask.TaskID)"
+            >{{ retryingId === selectedTask.TaskID ? $t('tasks.retrying') : $t('tasks.retry_btn') }}</button>
           </div>
           <div class="detail-field" v-if="selectedTask.DirectLink">
             <span class="detail-field__label">{{ t('tasks.direct_link') }}</span>
@@ -610,7 +702,7 @@ function formatTime(t: string | null | undefined): string {
 
 .task-table__head {
   display: grid;
-  grid-template-columns: 36px 1fr 90px 110px 160px;
+  grid-template-columns: 36px 1fr 90px 110px 230px;
   gap: 12px;
   padding: 10px 16px;
   background: var(--surface);
@@ -633,7 +725,7 @@ function formatTime(t: string | null | undefined): string {
 
 .task-row {
   display: grid;
-  grid-template-columns: 36px 1fr 90px 110px 160px;
+  grid-template-columns: 36px 1fr 90px 110px 230px;
   gap: 12px;
   padding: 12px 16px;
   font-size: 14px;
@@ -668,7 +760,6 @@ function formatTime(t: string | null | undefined): string {
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow: hidden;
   color: var(--text);
   font-weight: 500;
 }
@@ -678,19 +769,65 @@ function formatTime(t: string | null | undefined): string {
   white-space: nowrap;
   flex: 1;
 }
-.task-row__delete {
+.task-row__actions {
   flex-shrink: 0;
   display: none;
+  align-items: center;
+  gap: 2px;
+}
+.task-row:hover .task-row__actions {
+  display: inline-flex;
+}
+
+.task-row__delete,
+.task-row__open {
   cursor: pointer;
   color: var(--muted);
   transition: color 0.15s;
   line-height: 1;
+  padding: 2px;
+  border-radius: 4px;
 }
-.task-row:hover .task-row__delete {
-  display: inline-flex;
+.task-row__open:hover {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 .task-row__delete:hover {
   color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+}
+.task-row__open--loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Custom tooltip (immediate show) ── */
+[data-tooltip] {
+  position: relative;
+}
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: #333;
+  color: #fff;
+  pointer-events: none;
+  opacity: 0;
+  transition: none;
+}
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+[data-theme="dark"] [data-tooltip]::after {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .task-row__size {
@@ -706,8 +843,10 @@ function formatTime(t: string | null | undefined): string {
 .task-row__time {
   color: var(--muted);
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-
 /* ── Status badges ── */
 .badge {
   display: inline-block;
@@ -721,6 +860,11 @@ function formatTime(t: string | null | undefined): string {
 .badge--active { background: #dbeafe; color: #1e40af; }
 .badge--complete { background: #10b981; color: white; }
 .badge--error { background: #fef2f2; color: #dc2626; }
+
+[data-theme="dark"] .badge--waiting { background: rgba(146,64,14,0.3); color: #fcd34d; }
+[data-theme="dark"] .badge--active { background: rgba(30,64,175,0.3); color: #93c5fd; }
+[data-theme="dark"] .badge--complete { background: rgba(16,185,129,0.3); color: #6ee7b7; }
+[data-theme="dark"] .badge--error { background: rgba(239,68,68,0.15); color: #fca5a5; }
 
 /* ── Hints ── */
 .loading-hint {
@@ -890,6 +1034,36 @@ function formatTime(t: string | null | undefined): string {
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn--primary { background: #3b82f6; color: white; }
 .btn--primary:hover:not(:disabled) { background: #2563eb; }
+.btn--retry {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  white-space: nowrap;
+  transition: all 0.2s;
+  margin-left: 6px;
+}
+.btn--retry:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+.btn--retry:disabled { opacity: 0.6; cursor: not-allowed; }
+
+[data-theme="dark"] .btn--retry {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+[data-theme="dark"] .btn--retry:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
 
 /* ── Sortable column headers ── */
 .sortable {

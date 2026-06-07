@@ -81,7 +81,13 @@ func main() {
 	providerHandler := handler.NewProviderHandler(providerUsecase)
 
 	userUsecase := usecase.NewUserUseCase(&allConfig, db)
-	userHandler := handler.NewUserHandler(userUsecase)
+	// 创建 AdminChecker（用于验证用户是否为 OpenList 管理员）
+	adminChecker := middleware.NewAdminChecker(allConfig.OpenList.BaseURL)
+	// 如果配置了初始 token，设置到 AdminChecker
+	if allConfig.OpenList.Token != "" {
+		adminChecker.SetToken(allConfig.OpenList.Token)
+	}
+	userHandler := handler.NewUserHandler(userUsecase, adminChecker)
 
 	storageUsecase := usecase.NewStorageUseCase(&allConfig)
 	storageHandler := handler.NewStorageHandler(storageUsecase)
@@ -99,9 +105,9 @@ func main() {
 	// 注册 Provider 相关路由
 	providerGroup := r.Group("/api/v1/provider")
 	{
-		providerGroup.POST("", providerHandler.RegisterProvider)
-		providerGroup.DELETE("", providerHandler.DeleteProvider)
-		providerGroup.PUT("/", providerHandler.UpdateProvider)
+		providerGroup.POST("", adminChecker.Middleware(), providerHandler.RegisterProvider)
+		providerGroup.DELETE("", adminChecker.Middleware(), providerHandler.DeleteProvider)
+		providerGroup.PUT("/", adminChecker.Middleware(), providerHandler.UpdateProvider)
 		providerGroup.GET("/info", providerHandler.GetProvider)
 		providerGroup.GET("/list", providerHandler.ListProvider)
 	}
@@ -109,7 +115,10 @@ func main() {
 	// 注册 Mount 相关路由
 	mountGroup := r.Group("/api/v1/mount")
 	{
-		mountGroup.POST("", mountHandler.CreateMount)
+		mountGroup.POST("", adminChecker.Middleware(), mountHandler.CreateMount)
+		mountGroup.GET("", mountHandler.ListMounts)
+		mountGroup.PUT("/:id", adminChecker.Middleware(), mountHandler.UpdateMount)
+		mountGroup.DELETE("/:id", adminChecker.Middleware(), mountHandler.DeleteMount)
 		mountGroup.GET("/:id/quota", mountHandler.GetMountQuota)
 		mountGroup.POST("/:id/quota/sync", mountHandler.SyncMountQuota)
 	}
@@ -118,7 +127,7 @@ func main() {
 	userGroup := r.Group("/api/v1/user")
 	{
 		userGroup.POST("/login", userHandler.UserLogin)
-		userGroup.DELETE("/reset", userHandler.Reset)
+		userGroup.DELETE("/reset", adminChecker.Middleware(), userHandler.Reset)
 		userGroup.GET("/info", userHandler.GetUserInfo)
 	}
 
@@ -138,6 +147,9 @@ func main() {
 		downloadGroup.POST("/tasks", downloadHandler.CreateTask)
 		downloadGroup.GET("/tasks/:id", downloadHandler.GetTask)
 		downloadGroup.GET("/aria2-status", downloadHandler.GetAria2Status)
+		downloadGroup.POST("/tasks/:id/retry", downloadHandler.RetryTask)
+		downloadGroup.POST("/tasks/:id/open", downloadHandler.OpenFile)
+			downloadGroup.POST("/tasks/:id/open-location", downloadHandler.OpenFileLocation)
 	}
 
 	if err := r.Run(":" + allConfig.App.Port); err != nil {

@@ -30,7 +30,7 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
@@ -109,7 +109,7 @@ onMounted(() => {
   <section class="page">
     <PageHeader :title="t('providers.title')" :description="t('providers.description')">
       <template #actions>
-        <button class="btn btn--primary" @click="openAddDialog">
+        <button v-if="store.isAdmin" class="btn btn--primary" @click="openAddDialog">
           {{ t('providers.register_btn') }}
         </button>
       </template>
@@ -129,6 +129,7 @@ onMounted(() => {
           <div class="provider-card__header-right">
             <StatusBadge :state="provider.status" />
             <button
+              v-if="store.isAdmin"
               class="provider-card__edit"
               @click="openEditDialog(provider)"
               :title="t('providers.edit_title')"
@@ -136,6 +137,7 @@ onMounted(() => {
               ✏️
             </button>
             <button
+              v-if="store.isAdmin"
               class="provider-card__delete"
               @click="handleDelete(provider)"
               :title="t('providers.delete_title')"

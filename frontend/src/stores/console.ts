@@ -1,9 +1,16 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { getProviderList, deleteProvider } from '@/api/provider'
 import type { ProviderRecord } from '@/types/provider'
 
-import { createMount, queryMountQuota, syncMountQuota } from '@/api/mount'
+import {
+  createMount,
+  listMounts,
+  updateMount,
+  deleteMount,
+  queryMountQuota,
+  syncMountQuota,
+} from '@/api/mount'
 import type { MountPoint } from '@/types/mount'
 import type { QuotaInfo } from '@/types/quota'
 
@@ -11,6 +18,7 @@ import { alertItems, metricCards, systemStatuses, taskDigests } from '@/mock/das
 import { quotaRecords } from '@/mock/quota'
 
 import { createTask } from '@/api/task'
+import { getUserInfo } from '@/api/user'
 
 export const useConsoleStore = defineStore('console', () => {
   const metrics = ref(metricCards)
@@ -21,7 +29,12 @@ export const useConsoleStore = defineStore('console', () => {
 
   const providers = ref<ProviderRecord[]>([])
 
-  // 最近一次配额数据（持久化到 localStorage，页面切换/重登录后保持显示）
+  // ── Mount 多挂载点支持 ──
+
+  // 所有挂载点的完整列表（来自后端）
+  const allMounts = ref<MountPoint[]>([])
+
+  // 最近一次配额数据（持久化到 localStorage）
   const QUOTA_KEY = 'openbridge_current_quota'
   const QUOTA_MODE_KEY = 'openbridge_current_quota_mode'
   const QUOTA_EXTRA_KEY = 'openbridge_current_quota_extra'
@@ -47,7 +60,7 @@ export const useConsoleStore = defineStore('console', () => {
   const currentQuotaExtra = ref<{ inherit_chain?: number[]; virtual_config?: Record<string, number> } | null>(storedQuotaExtra)
   const quotaLoading = ref(false)
 
-  // provider_account_id → mount_id 映射（持久化到 localStorage，避免页面切换后丢失）
+  // 挂载点映射（provider_account_id → mount_id[]）
   const MOUNT_MAP_KEY = 'openbridge_mount_id_by_provider'
   const storedMountMap = (() => {
     try {
@@ -55,11 +68,13 @@ export const useConsoleStore = defineStore('console', () => {
       return raw ? JSON.parse(raw) : {}
     } catch { return {} }
   })()
+  // 维护一个兼容性映射，但实际使用 allMounts
   const mountIdByProvider = ref<Record<number, number>>(storedMountMap)
-  const mountCreating = ref(false)
 
-  // 挂载点详情列表（用于 inherit 模式选择父挂载点）— 也持久化
+  // 挂载点详情列表（完全由 API 驱动，不依赖 localStorage）
   const MOUNTS_KEY = 'openbridge_mounts'
+  // 清理旧的 localStorage 数据，避免过期 mount 显示在 Dashboard 展开列表中
+  localStorage.removeItem(MOUNTS_KEY)
   interface MountInfo {
     id: number
     name: string
@@ -67,15 +82,11 @@ export const useConsoleStore = defineStore('console', () => {
     providerName: string
     providerId: number
   }
-  const storedMounts = (() => {
-    try {
-      const raw = localStorage.getItem(MOUNTS_KEY)
-      return raw ? JSON.parse(raw) : []
-    } catch { return [] }
-  })()
-  const mounts = ref<MountInfo[]>(storedMounts)
+  const mounts = ref<MountInfo[]>([])
 
-  // Auth state — persisted across page refreshes
+  const mountCreating = ref(false)
+
+  // ── Auth state ──
   const AUTH_KEY = 'openbridge_auth'
   const storedAuth = (() => {
     try {
@@ -98,7 +109,7 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.removeItem(AUTH_KEY)
   }
 
-  // Default download directory — persisted to localStorage
+  // Default download directory
   const DD_KEY = 'openbridge_default_download_dir'
   const defaultDownloadDir = ref(localStorage.getItem(DD_KEY) || '')
 
@@ -107,10 +118,29 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.setItem(DD_KEY, dir)
   }
 
-  // All users are admins
-  const isAdmin = ref(true)
+  const userRole = ref<number | null>(null)
+  // OpenList 角色: 0=GENERAL, 1=GUEST, 2=ADMIN
+  const isAdmin = computed(() => userRole.value === 2)
 
-  // 获取 Provider 列表
+  async function fetchCurrentUser() {
+    try {
+      const res = await getUserInfo()
+      if (res.code === 1000) {
+        userRole.value = res.data.role
+      }
+    } catch {
+      // 静默处理，非管理员用户可能无法访问
+    }
+  }
+
+  // 页面刷新时，如果已登录则自动获取用户角色和挂载点数据
+  if (isLoggedIn.value) {
+    fetchCurrentUser()
+    fetchAllMounts()
+  }
+
+  // ── Provider actions ──
+
   async function fetchProviders() {
     try {
       const res = await getProviderList()
@@ -123,13 +153,11 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 持久化 mount 映射到 localStorage（避免页面切换后丢失）
+  // 持久化 mount 映射
   function saveMountMapping() {
     localStorage.setItem(MOUNT_MAP_KEY, JSON.stringify(mountIdByProvider.value))
-    localStorage.setItem(MOUNTS_KEY, JSON.stringify(mounts.value))
   }
 
-  // 删除 Provider
   async function removeProvider(id: number) {
     try {
       const res = await deleteProvider(id)
@@ -144,7 +172,46 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 持久化最近一次配额数据（页面切换/重登录后直接显示，不等异步查询）
+  // ── Mount actions ──
+
+  /** 从后端加载所有挂载点，按 provider 分组缓存到 allMounts */
+  async function fetchAllMounts() {
+    try {
+      const res = await listMounts()
+      if (res.code === 1000) {
+        allMounts.value = res.data
+        // 同步 mounts 兼容性列表
+        rebuildMountInfo()
+      }
+    } catch (error) {
+      console.error('获取挂载点列表失败', error)
+    }
+  }
+
+  /** 根据 allMounts 重建 mounts 和 mountIdByProvider 兼容数据 */
+  function rebuildMountInfo() {
+    const newIdMap: Record<number, number> = {}
+    // 只保留每个 provider 的最后一个 mount 作为兼容映射值
+    for (const m of allMounts.value) {
+      newIdMap[m.provider_account_id] = m.id
+    }
+    mountIdByProvider.value = newIdMap
+    mounts.value = allMounts.value.map(m => ({
+      id: m.id,
+      name: m.name,
+      mode: m.quota_mode,
+      providerName: m.provider_type,
+      providerId: m.provider_account_id,
+    }))
+    saveMountMapping()
+  }
+
+  /** 获取指定 provider 的所有挂载点 */
+  function getMountsByProvider(providerId: number): MountPoint[] {
+    return allMounts.value.filter(m => m.provider_account_id === providerId)
+  }
+
+  /** 持久化最近一次配额数据 */
   function saveQuotaData() {
     if (currentQuota.value) {
       localStorage.setItem(QUOTA_KEY, JSON.stringify(currentQuota.value))
@@ -161,7 +228,7 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 通过 Mount 查询配额
+  /** 查询指定挂载点的配额 */
   async function queryQuotaByMount(mountId: number) {
     quotaLoading.value = true
     try {
@@ -177,14 +244,14 @@ export const useConsoleStore = defineStore('console', () => {
       }
       return res
     } catch (error) {
-      console.error('查询配额失败', error)
+      // 静默处理（mount 可能已被删除等正常情况）
       return null
     } finally {
       quotaLoading.value = false
     }
   }
 
-  // 通过 Mount 同步配额
+  /** 同步指定挂载点的配额 */
   async function syncQuotaByMount(mountId: number) {
     quotaLoading.value = true
     try {
@@ -207,7 +274,7 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 为指定 Provider 创建 Mount
+  /** 为指定 provider 创建挂载点 */
   async function createMountForProvider(
     providerId: number,
     providerName: string,
@@ -236,15 +303,8 @@ export const useConsoleStore = defineStore('console', () => {
       }
       const res = await createMount(payload)
       if (res.code === 1000) {
-        mountIdByProvider.value[providerId] = res.data.id
-        mounts.value.push({
-          id: res.data.id,
-          name: payload.name || `${providerName} Mount`,
-          mode: quotaMode,
-          providerName,
-          providerId,
-        })
-        saveMountMapping()
+        // 刷新挂载点列表
+        await fetchAllMounts()
         return res.data
       }
       return null
@@ -255,7 +315,40 @@ export const useConsoleStore = defineStore('console', () => {
       mountCreating.value = false
     }
   }
-  // 创建任务
+
+  /** 删除指定挂载点 */
+  async function deleteMountById(mountId: number): Promise<boolean> {
+    try {
+      const res = await deleteMount(mountId)
+      if (res.code === 1000) {
+        await fetchAllMounts()
+        // 如果当前显示的配额就是这个 mount，清空
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('删除 Mount 失败', error)
+      return false
+    }
+  }
+
+  /** 更新指定挂载点 */
+  async function updateMountById(mountId: number, data: Partial<MountPoint>): Promise<MountPoint | null> {
+    try {
+      const res = await updateMount(mountId, data)
+      if (res.code === 1000) {
+        await fetchAllMounts()
+        return res.data
+      }
+      return null
+    } catch (error) {
+      console.error('更新 Mount 失败', error)
+      return null
+    }
+  }
+
+  // ── Task actions ──
+
   async function addTask(data: { path: string; dir?: string }) {
     const res = await createTask(data)
     if (res.code === 1000) {
@@ -265,7 +358,6 @@ export const useConsoleStore = defineStore('console', () => {
     return res
   }
 
-  // 下载任务 ID 列表（持久化到 localStorage）
   const STORAGE_KEY = 'openbridge_download_task_ids'
   const downloadTaskIds = ref<string[]>(loadTaskIds())
 
@@ -308,9 +400,14 @@ export const useConsoleStore = defineStore('console', () => {
     mountIdByProvider,
     mounts,
     mountCreating,
+    allMounts,
+    getMountsByProvider,
+    fetchAllMounts,
     queryQuotaByMount,
     syncQuotaByMount,
     createMountForProvider,
+    deleteMountById,
+    updateMountById,
     addTask,
     downloadTaskIds,
     recordTaskId,
@@ -319,7 +416,9 @@ export const useConsoleStore = defineStore('console', () => {
     currentUser,
     login,
     logout,
+    userRole,
     isAdmin,
+    fetchCurrentUser,
     defaultDownloadDir,
     setDefaultDownloadDir,
   }
