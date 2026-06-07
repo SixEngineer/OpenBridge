@@ -1,0 +1,147 @@
+package usecase
+
+import (
+	"errors"
+	"openbridge/backend/internal/config"
+	"openbridge/backend/internal/domain/entity"
+	"openbridge/backend/internal/domain/providers"
+	"openbridge/backend/internal/repository"
+	"openbridge/backend/internal/tool"
+)
+
+type ProviderUseCase struct {
+	ProviderRepo     *repository.ProviderRepository
+	ProviderRegistry *tool.Registry
+	MountRepo        *repository.MountRepository
+	config           *config.Config
+}
+
+// 构造函数
+func NewProviderUseCase(providerRepo *repository.ProviderRepository, providerRegistry *tool.Registry, mountRepo *repository.MountRepository, cfg *config.Config) *ProviderUseCase {
+	return &ProviderUseCase{
+		ProviderRepo:     providerRepo,
+		ProviderRegistry: providerRegistry,
+		MountRepo:        mountRepo,
+		config:           cfg,
+	}
+}
+
+// 注册 Provider
+func (p *ProviderUseCase) RegisterProvider(providerAccount entity.ProviderAccount) error {
+	scope := p.currentOpenListScope()
+	if err := p.ProviderRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return err
+	}
+	providerAccount.OpenListBaseURL = scope
+
+	providerNetDisk := providerAccount.NetDisk
+
+	switch providerNetDisk {
+	case "mock":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), &providers.MockProvider{})
+	case "baidu":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewBaiduProvider(p.ProviderRepo))
+	case "quark":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewQuarkProvider(p.ProviderRepo))
+	case "local": // Windows本地存储Provider，在Linux环境下不编译
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewLocalProvider(p.ProviderRepo, p.MountRepo))
+	default:
+		return errors.New("provider netdisk type undefined")
+	}
+
+	return p.ProviderRepo.InsertProviderAccount(&providerAccount)
+}
+
+// 删除 Provider
+func (p *ProviderUseCase) DeleteProvider(id uint) error {
+	scope := p.currentOpenListScope()
+	if err := p.ProviderRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return err
+	}
+
+	// 首先获取ProviderAccount信息，以便从Registry中注销
+	providerAccount, err := p.ProviderRepo.GetProviderAccountByOpenList(id, scope)
+	if err != nil {
+		return err
+	}
+
+	// 从Registry中注销Provider
+	p.ProviderRegistry.Unregister(providerRegistryKey(providerAccount))
+
+	// 级联删除该 provider 下的所有 mount 点
+	if err := p.MountRepo.DeleteMountPointsByProviderAccountID(id); err != nil {
+		return err
+	}
+
+	// 同时删除继承自该 provider 下 mount 点的所有继承 mount（清理孤儿数据）
+	if err := p.MountRepo.DeleteInheritMountPointsByParentProvider(id); err != nil {
+		return err
+	}
+
+	return p.ProviderRepo.DeleteProviderAccount(id)
+}
+
+// 更新 Provider 信息
+func (p *ProviderUseCase) UpdateProvider(providerAccount entity.ProviderAccount) error {
+	scope := p.currentOpenListScope()
+	if err := p.ProviderRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return err
+	}
+
+	providerAccountOld, err := p.ProviderRepo.GetProviderAccountByOpenList(providerAccount.ID, scope)
+	if err != nil {
+		return err
+	}
+	providerAccount.OpenListBaseURL = providerAccountOld.OpenListBaseURL
+
+	// 删除旧的Provider
+	p.ProviderRegistry.Unregister(providerRegistryKey(providerAccountOld))
+
+	// 注册新的Provider
+	providerNetDisk := providerAccount.NetDisk
+
+	switch providerNetDisk {
+	case "mock":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), &providers.MockProvider{})
+	case "baidu":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewBaiduProvider(p.ProviderRepo))
+	case "quark":
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewQuarkProvider(p.ProviderRepo))
+	case "local": // Windows本地存储Provider，在Linux环境下不编译
+		p.ProviderRegistry.Register(providerRegistryKey(&providerAccount), providers.NewLocalProvider(p.ProviderRepo, p.MountRepo))
+	// case "local_windows": // Windows本地存储Provider，在Linux环境下不编译
+	// 	p.ProviderRegistry.Register(providerAccount.Name, &providers.LocalWindowsProvider{})
+	// case "local_linux": // Linux本地存储Provider，在Windows环境下不编译
+	// 	p.ProviderRegistry.Register(providerAccount.Name, providers.NewLocalLinuxProvider(p.ProviderRepo))
+	default:
+		return errors.New("provider not found")
+	}
+
+	return p.ProviderRepo.UpdateProviderAccount(&providerAccount)
+}
+
+// 获取 Provider
+func (p *ProviderUseCase) GetProvider(id uint) (*entity.ProviderAccount, error) {
+	scope := p.currentOpenListScope()
+	if err := p.ProviderRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return nil, err
+	}
+	return p.ProviderRepo.GetProviderAccountByOpenList(id, scope)
+}
+
+// 获取 Provider 列表
+func (p *ProviderUseCase) ListProvider() ([]entity.ProviderAccount, error) {
+	scope := p.currentOpenListScope()
+	if err := p.ProviderRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return nil, err
+	}
+	return p.ProviderRepo.ListProviderAccountsByOpenList(scope)
+}
+
+func (p *ProviderUseCase) currentOpenListScope() string {
+	return config.NormalizeBaseURLScope(p.config.OpenList.BaseURL)
+}
+
+func providerRegistryKey(providerAccount *entity.ProviderAccount) string {
+	return config.NormalizeBaseURLScope(providerAccount.OpenListBaseURL) + "::" + providerAccount.Name
+}

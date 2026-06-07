@@ -1,0 +1,424 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import ProviderFormDialog from '@/components/provider/ProviderFormDialog.vue'
+import { useConsoleStore } from '@/stores/console'
+import type { ProviderRecord } from '@/types/provider'
+import { registerProvider, updateProvider } from '@/api/provider'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+const store = useConsoleStore()
+
+// Dialog state
+const dialogVisible = ref(false)
+const editingProvider = ref<ProviderRecord | null>(null)
+
+// Toast notification
+const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.value = { show: true, message, type }
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+  }, 2500)
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// Backend stores quota in MB, convert to bytes for formatting
+function formatProviderQuota(mb: number): string {
+  return formatBytes(mb * 1024 * 1024)
+}
+
+// Mock providers store values in GB but backend reports as MB
+function displayQuota(mb: number, providerType: string): string {
+  const scale = providerType === 'mock' ? 1024 : 1
+  return formatProviderQuota(mb * scale)
+}
+
+function quotaDisplay(provider: ProviderRecord) {
+  const quota = store.getEffectiveProviderQuota(provider)
+  if (!quota) {
+    return {
+      total: '0 B',
+      used: '0 B',
+      available: '0 B',
+    }
+  }
+
+  if (quota.mode === 'virtual') {
+    return {
+      total: formatProviderQuota(quota.total),
+      used: formatProviderQuota(quota.used),
+      available: formatProviderQuota(quota.available),
+    }
+  }
+
+  return {
+    total: displayQuota(quota.total, quota.providerType),
+    used: displayQuota(quota.used, quota.providerType),
+    available: displayQuota(quota.available, quota.providerType),
+  }
+}
+
+function openAddDialog() {
+  editingProvider.value = null
+  dialogVisible.value = true
+}
+
+function openEditDialog(provider: ProviderRecord) {
+  editingProvider.value = provider
+  dialogVisible.value = true
+}
+
+async function handleSubmit(data: Partial<ProviderRecord>) {
+  // 检查同名（编辑时排除自身）
+  if (!editingProvider.value?.id) {
+    const exists = store.providers.some(p => p.name === data.name)
+    if (exists) {
+      showToast(t('providers.name_exists'), 'error')
+      return
+    }
+  }
+  try {
+    let res
+    if (editingProvider.value?.id) {
+      res = await updateProvider({ ...data, id: editingProvider.value.id })
+    } else {
+      res = await registerProvider(data)
+    }
+
+    if (res.code === 1000 || res.code === 0) {
+      showToast(editingProvider.value ? t('providers.updated_success') : t('providers.registered_success'))
+      dialogVisible.value = false
+      editingProvider.value = null
+      await store.fetchProviders()
+    } else {
+      showToast('Failed: ' + (res.msg), 'error')
+    }
+  } catch (error: any) {
+    console.error('Operation failed', error)
+    showToast(error?.message || t('common.operation_failed'), 'error')
+  }
+}
+
+async function handleDelete(provider: ProviderRecord) {
+  if (!confirm(`${t('providers.delete_confirm')} "${provider.name}"?`)) {
+    return
+  }
+
+  const success = await store.removeProvider(provider.id)
+  if (success) {
+    showToast(t('providers.delete_success'))
+  } else {
+    showToast(t('providers.delete_failed'), 'error')
+  }
+}
+
+onMounted(() => {
+  store.fetchProviders()
+  store.fetchAllMounts()
+})
+</script>
+
+<template>
+  <section class="page">
+    <PageHeader :title="t('providers.title')" :description="t('providers.description')">
+      <template #actions>
+        <button v-if="store.isAdmin" class="btn btn--primary" @click="openAddDialog">
+          {{ t('providers.register_btn') }}
+        </button>
+      </template>
+    </PageHeader>
+
+    <div v-if="store.providers.length === 0" class="empty-state">
+      <p>{{ t('providers.empty') }}</p>
+    </div>
+
+    <div v-else class="provider-grid">
+      <article v-for="provider in store.providers" :key="provider.id" class="provider-card">
+        <div class="provider-card__header">
+          <div>
+            <p class="provider-card__name">{{ provider.name }}</p>
+            <p class="provider-card__id">{{ provider.provider_type }} · {{ provider.net_disk }}</p>
+          </div>
+          <div class="provider-card__header-right">
+            <StatusBadge :state="provider.status" />
+            <button
+              v-if="store.isAdmin"
+              class="provider-card__edit"
+              @click="openEditDialog(provider)"
+              :title="t('providers.edit_title')"
+            >
+              ✏️
+            </button>
+            <button
+              v-if="store.isAdmin"
+              class="provider-card__delete"
+              @click="handleDelete(provider)"
+              :title="t('providers.delete_title')"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+
+        <template v-if="provider.net_disk === 'local'">
+          <p class="provider-card__section-title">{{ t('providers.local_path') }}</p>
+          <p class="provider-card__text">{{ provider.account_id || t('providers.not_set') }}</p>
+        </template>
+        <div v-else class="provider-card__placeholder"></div>
+
+        <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
+        <p class="provider-card__text">
+          {{ t('providers.total') }} {{ quotaDisplay(provider).total }}<br>
+          {{ t('providers.used') }} {{ quotaDisplay(provider).used }}<br>
+          {{ t('providers.available') }} {{ quotaDisplay(provider).available }}
+        </p>
+        
+        <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>
+        <p class="provider-card__text provider-card__text--error" v-if="provider.last_error">
+          {{ provider.last_error }}
+        </p>
+      </article>
+    </div>
+
+    <ProviderFormDialog
+      v-model:visible="dialogVisible"
+      :provider="editingProvider"
+      @submit="handleSubmit"
+    />
+
+    <transition name="toast-fade">
+      <div v-if="toast.show" class="toast" :class="`toast--${toast.type}`">
+        {{ toast.message }}
+      </div>
+    </transition>
+  </section>
+</template>
+
+<style scoped>
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.provider-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.provider-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border-color: var(--border);
+}
+
+.provider-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.provider-card__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-card__edit {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0.5;
+  transition: all 0.2s;
+}
+
+.provider-card__edit:hover {
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.provider-card__delete {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0.5;
+  transition: all 0.2s;
+}
+
+.provider-card__delete:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.provider-card__name {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: var(--text);
+}
+
+.provider-card__id {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.provider-card__section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin: 16px 0 4px 0;
+}
+
+.provider-card__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.provider-card__text--error {
+  color: #ef4444;
+}
+
+.provider-card__placeholder {
+  height: 43px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+  font-size: 16px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+}
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn--primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn--primary:hover {
+  background: #2563eb;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+.toast--success {
+  background: rgba(42, 167, 106, 0.15);
+  color: #2aa76a;
+  border: 1px solid rgba(42, 167, 106, 0.3);
+}
+.toast--error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.toast-fade-enter-active { transition: all 0.3s ease; }
+.toast-fade-leave-active { transition: all 0.3s ease; }
+.toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+.toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+
+@media (max-width: 860px) {
+  .provider-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .provider-card {
+    padding: 12px;
+  }
+
+  .provider-card__header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .provider-card__header > div:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .provider-card__header-right {
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .provider-card__name {
+    font-size: 14px;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .provider-card__id {
+    font-size: 11px;
+  }
+
+  .provider-card__section-title {
+    font-size: 10px;
+    margin: 6px 0 2px 0;
+  }
+
+  .provider-card__text {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .provider-card__placeholder {
+    display: none;
+  }
+}
+</style>
