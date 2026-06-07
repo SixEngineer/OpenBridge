@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
+import LocalPathInput from '@/components/common/LocalPathInput.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
-import { getUserInfo } from '@/api/user'
+import { getUserInfo, userReset } from '@/api/user'
 import type { UserInfo } from '@/api/user'
+import { getSettings, updateAria2Settings, updateOpenListSettings, updateRcloneSettings } from '@/api/settings'
 
 const store = useConsoleStore()
+const router = useRouter()
 const { t } = useI18n()
 
 // ── Default download directory ──
@@ -18,27 +22,39 @@ function saveDownloadDir() {
 }
 
 // ── aria2 RPC URL ──
-const ARIA2_URL_KEY = 'openbridge_aria2_rpc_url'
-const aria2UrlInput = ref(localStorage.getItem(ARIA2_URL_KEY) || 'http://127.0.0.1:6800/jsonrpc')
-const aria2UrlChanged = computed(() => aria2UrlInput.value !== (localStorage.getItem(ARIA2_URL_KEY) || 'http://127.0.0.1:6800/jsonrpc'))
-
-function saveAria2Url() {
-  localStorage.setItem(ARIA2_URL_KEY, aria2UrlInput.value.trim())
-}
+const aria2UrlInput = ref('http://127.0.0.1:6800/jsonrpc')
+const savedAria2Url = ref('')
+const settingsLoading = ref(false)
+const settingsError = ref(false)
+const savingAria2 = ref(false)
+const aria2UrlChanged = computed(() => aria2UrlInput.value.trim() !== savedAria2Url.value)
+const rclonePathInput = ref('')
+const savedRclonePath = ref('')
+const savingRclone = ref(false)
+const rclonePathChanged = computed(() => rclonePathInput.value.trim() !== savedRclonePath.value)
 
 // ── OpenList URL ──
-const OL_URL_KEY = 'openbridge_ol_url'
-const olUrlInput = ref(localStorage.getItem(OL_URL_KEY) || 'http://localhost:5244')
-const olUrlChanged = computed(() => olUrlInput.value !== (localStorage.getItem(OL_URL_KEY) || 'http://localhost:5244'))
+const olUrlInput = ref('http://127.0.0.1:5244')
+const savedOlUrl = ref('')
+const savingOpenList = ref(false)
+const olUrlChanged = computed(() => olUrlInput.value.trim() !== savedOlUrl.value)
 
-function saveOlUrl() {
-  localStorage.setItem(OL_URL_KEY, olUrlInput.value.trim())
+// ── Local session timeout ──
+const sessionTimeoutInput = ref(String(store.sessionTimeoutMinutes))
+const sessionTimeoutChanged = computed(() => Number(sessionTimeoutInput.value) !== store.sessionTimeoutMinutes)
+
+function saveSessionTimeout() {
+  const minutes = Number(sessionTimeoutInput.value)
+  store.setSessionTimeout(minutes)
+  sessionTimeoutInput.value = String(store.sessionTimeoutMinutes)
 }
 
 // ── User Info ──
 const userInfo = ref<UserInfo | null>(null)
 const userInfoLoading = ref(false)
 const userInfoError = ref(false)
+const resettingCurrent = ref(false)
+const resettingAll = ref(false)
 
 async function fetchUserInfo() {
   userInfoLoading.value = true
@@ -57,6 +73,96 @@ async function fetchUserInfo() {
   }
 }
 
+async function fetchSettings() {
+  settingsLoading.value = true
+  settingsError.value = false
+  try {
+    const res = await getSettings()
+    savedAria2Url.value = res.data.aria2_rpc_url || 'http://127.0.0.1:6800/jsonrpc'
+    savedOlUrl.value = res.data.openlist_base_url || 'http://127.0.0.1:5244'
+    savedRclonePath.value = res.data.rclone_path || ''
+    aria2UrlInput.value = savedAria2Url.value
+    olUrlInput.value = savedOlUrl.value
+    rclonePathInput.value = savedRclonePath.value
+  } catch {
+    settingsError.value = true
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+async function saveRclonePath() {
+  savingRclone.value = true
+  try {
+    const res = await updateRcloneSettings({ path: rclonePathInput.value.trim() })
+    savedRclonePath.value = res.data.rclone_path
+    rclonePathInput.value = res.data.rclone_path
+    settingsError.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingRclone.value = false
+  }
+}
+
+async function saveAria2Url() {
+  savingAria2.value = true
+  try {
+    const res = await updateAria2Settings({ rpc_url: aria2UrlInput.value.trim() })
+    savedAria2Url.value = res.data.aria2_rpc_url
+    aria2UrlInput.value = res.data.aria2_rpc_url
+    settingsError.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingAria2.value = false
+  }
+}
+
+async function saveOlUrl() {
+  savingOpenList.value = true
+  try {
+    const res = await updateOpenListSettings({ base_url: olUrlInput.value.trim() })
+    savedOlUrl.value = res.data.openlist_base_url
+    olUrlInput.value = res.data.openlist_base_url
+    settingsError.value = false
+    store.logout('source_changed')
+    router.replace('/login')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingOpenList.value = false
+  }
+}
+
+async function handleReset(scope: 'current' | 'all') {
+  const confirmKey = scope === 'current' ? 'settings.reset_current_confirm' : 'settings.reset_all_confirm'
+  const successKey = scope === 'current' ? 'settings.reset_current_success' : 'settings.reset_all_success'
+  const pending = scope === 'current' ? resettingCurrent : resettingAll
+
+  if (!window.confirm(t(confirmKey))) {
+    return
+  }
+
+  pending.value = true
+  try {
+    await userReset(scope)
+    await Promise.all([
+      store.fetchProviders(),
+      store.fetchAllMounts(),
+    ])
+    alert(t(successKey))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('settings.reset_failed')
+    alert(message)
+  } finally {
+    pending.value = false
+  }
+}
+
 function roleLabel(role: number): string {
   // OpenList 角色: 0=GENERAL, 1=GUEST, 2=ADMIN
   switch (role) {
@@ -68,7 +174,9 @@ function roleLabel(role: number): string {
 }
 
 onMounted(() => {
+  sessionTimeoutInput.value = String(store.sessionTimeoutMinutes)
   fetchUserInfo()
+  fetchSettings()
 })
 </script>
 
@@ -147,6 +255,7 @@ onMounted(() => {
       <article class="card">
         <h3 class="card__title">{{ t('settings.aria2') }}</h3>
         <div class="card__body">
+          <p v-if="settingsError" class="field__error">{{ t('settings.api_error') }}</p>
           <div class="field">
             <span class="field__label">{{ t('settings.rpc_url') }}</span>
             <div class="input-row">
@@ -156,21 +265,56 @@ onMounted(() => {
                 placeholder="http://127.0.0.1:6800/jsonrpc"
                 @keyup.enter="saveAria2Url"
               />
-              <button class="btn btn--sm" @click="saveAria2Url" :disabled="!aria2UrlChanged">{{ t('settings.save') }}</button>
+              <button class="btn btn--sm" @click="saveAria2Url" :disabled="settingsLoading || savingAria2 || !aria2UrlChanged">{{ t('settings.save') }}</button>
             </div>
           </div>
           <div class="field">
             <span class="field__label">{{ t('settings.download_dir') }}</span>
             <div class="input-row">
-              <input
+              <LocalPathInput
                 v-model="downloadDirInput"
-                class="config-input"
                 :placeholder="t('settings.dir_placeholder')"
-                @keyup.enter="saveDownloadDir"
+                mode="directory"
+                :title="t('settings.download_dir')"
               />
               <button class="btn btn--sm" @click="saveDownloadDir" :disabled="!dirChanged">{{ t('settings.save') }}</button>
             </div>
             <span class="field__hint">{{ t('settings.dir_hint') }}</span>
+          </div>
+          <div class="field">
+            <span class="field__label">{{ t('settings.session_timeout') }}</span>
+            <div class="input-row">
+              <input
+                v-model="sessionTimeoutInput"
+                class="config-input"
+                inputmode="numeric"
+                placeholder="120"
+                @keyup.enter="saveSessionTimeout"
+              />
+              <button class="btn btn--sm" @click="saveSessionTimeout" :disabled="!sessionTimeoutChanged">{{ t('settings.save') }}</button>
+            </div>
+            <span class="field__hint">{{ t('settings.session_timeout_hint') }}</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3 class="card__title">{{ t('sidebar.items.rclone') }}</h3>
+        <div class="card__body">
+          <p v-if="settingsError" class="field__error">{{ t('settings.api_error') }}</p>
+          <div class="field">
+            <span class="field__label">{{ t('settings.rclone_path') }}</span>
+            <div class="input-row">
+              <LocalPathInput
+                v-model="rclonePathInput"
+                placeholder="C:\\Program Files\\rclone\\rclone.exe"
+                mode="file"
+                :title="t('settings.rclone_path')"
+                filter="Executable (*.exe)|*.exe|All files (*.*)|*.*"
+              />
+              <button class="btn btn--sm" @click="saveRclonePath" :disabled="settingsLoading || savingRclone || !rclonePathChanged">{{ t('settings.save') }}</button>
+            </div>
+            <span class="field__hint">{{ t('settings.rclone_path_hint') }}</span>
           </div>
         </div>
       </article>
@@ -178,16 +322,50 @@ onMounted(() => {
       <article class="card">
         <h3 class="card__title">{{ t('settings.openlist') }}</h3>
         <div class="card__body">
+          <p v-if="settingsError" class="field__error">{{ t('settings.api_error') }}</p>
           <div class="field">
             <span class="field__label">{{ t('settings.openlist_url') }}</span>
             <div class="input-row">
               <input
                 v-model="olUrlInput"
                 class="config-input"
-                placeholder="http://localhost:5244"
+                placeholder="http://127.0.0.1:5244"
                 @keyup.enter="saveOlUrl"
               />
-              <button class="btn btn--sm" @click="saveOlUrl" :disabled="!olUrlChanged">{{ t('settings.save') }}</button>
+              <button class="btn btn--sm" @click="saveOlUrl" :disabled="settingsLoading || savingOpenList || !olUrlChanged">{{ t('settings.save') }}</button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article v-if="store.isAdmin" class="card card--danger">
+        <h3 class="card__title">{{ t('settings.reset') }}</h3>
+        <div class="card__body">
+          <p class="field__hint">{{ t('settings.reset_desc') }}</p>
+          <div class="field">
+            <span class="field__label">{{ t('settings.reset_current') }}</span>
+            <div class="input-row">
+              <span class="field__hint">{{ t('settings.reset_current_desc') }}</span>
+              <button
+                class="btn btn--sm btn--danger"
+                @click="handleReset('current')"
+                :disabled="resettingCurrent || resettingAll"
+              >
+                {{ resettingCurrent ? t('settings.resetting') : t('settings.reset_current_button') }}
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field__label">{{ t('settings.reset_all') }}</span>
+            <div class="input-row">
+              <span class="field__hint">{{ t('settings.reset_all_desc') }}</span>
+              <button
+                class="btn btn--sm btn--danger"
+                @click="handleReset('all')"
+                :disabled="resettingCurrent || resettingAll"
+              >
+                {{ resettingAll ? t('settings.resetting') : t('settings.reset_all_button') }}
+              </button>
             </div>
           </div>
         </div>
@@ -210,6 +388,10 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid var(--border);
   padding: 20px;
+}
+
+.card--danger {
+  border-color: rgba(239, 68, 68, 0.28);
 }
 
 .card__title {
@@ -259,6 +441,12 @@ onMounted(() => {
   color: var(--muted);
 }
 
+.field__error {
+  margin: 0;
+  font-size: 13px;
+  color: #dc2626;
+}
+
 .input-row {
   display: flex;
   gap: 8px;
@@ -296,6 +484,13 @@ onMounted(() => {
 }
 .btn--sm:hover:not(:disabled) { background: #2563eb; }
 .btn--sm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn--danger {
+  background: #dc2626;
+}
+.btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
 
 .version-info {
   text-align: center;

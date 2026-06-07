@@ -2,8 +2,6 @@ package config
 
 import (
 	"os"
-
-	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -11,6 +9,7 @@ type Config struct {
 	DB       DBConfig
 	Aria2    Aria2Config
 	OpenList OpenListConfig
+	Rclone   RcloneConfig
 	Log      LogConfig
 }
 
@@ -25,14 +24,18 @@ type DBConfig struct {
 }
 
 type Aria2Config struct {
-	RPCURL string
-	Secret string
+	RPCURL      string
+	Secret      string
 	DownloadDir string
 }
 
 type OpenListConfig struct {
 	BaseURL string
 	Token   string
+}
+
+type RcloneConfig struct {
+	Path string
 }
 
 type LogConfig struct {
@@ -43,7 +46,7 @@ type LogConfig struct {
 // 读取配置
 func ReadConfig() Config {
 	// 加载.env文件
-	err := godotenv.Load()
+	err := LoadEnvFile()
 	if err != nil {
 		panic("Error loading .env file")
 	}
@@ -59,13 +62,16 @@ func ReadConfig() Config {
 			Path: os.Getenv("DB_PATH"),
 		},
 		Aria2: Aria2Config{
-			RPCURL: os.Getenv("ARIA2_RPC_URL"),
-			Secret: os.Getenv("ARIA2_SECRET"),
+			RPCURL:      os.Getenv("ARIA2_RPC_URL"),
+			Secret:      GetEnvWithFallback("ARIA2_SECRET", "ARIA2_RPC_SECRET"),
 			DownloadDir: os.Getenv("ARIA2_DOWNLOAD_DIR"),
 		},
 		OpenList: OpenListConfig{
 			BaseURL: os.Getenv("OPENLIST_BASE_URL"),
 			Token:   os.Getenv("OPENLIST_TOKEN"),
+		},
+		Rclone: RcloneConfig{
+			Path: os.Getenv("RCLONE_PATH"),
 		},
 		Log: LogConfig{
 			Level:  os.Getenv("LOG_LEVEL"),

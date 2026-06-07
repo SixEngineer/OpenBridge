@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"openbridge/backend/internal/config"
 	"openbridge/backend/internal/domain/entity"
 	"openbridge/backend/internal/domain/interfaces"
 	"openbridge/backend/internal/domain/providers"
@@ -19,6 +20,7 @@ import (
 
 var (
 	ErrMountInvalidMode           = errors.New("mount quota_mode is invalid")
+	ErrMountPathRequired          = errors.New("mount path is required")
 	ErrMountProviderRequired      = errors.New("real mode requires provider_account_id")
 	ErrMountParentRequired        = errors.New("inherit mode requires inherit_from_id")
 	ErrMountParentNotReal         = errors.New("inherit parent must be real mode")
@@ -44,14 +46,16 @@ type MountUseCase struct {
 	providerRepo     *repository.ProviderRepository
 	quotaRepo        *repository.QuotaRepository
 	providerRegistry *tool.Registry
+	config           *config.Config
 }
 
-func NewMountUseCase(mountRepo *repository.MountRepository, providerRepo *repository.ProviderRepository, quotaRepo *repository.QuotaRepository, providerRegistry *tool.Registry) *MountUseCase {
+func NewMountUseCase(mountRepo *repository.MountRepository, providerRepo *repository.ProviderRepository, quotaRepo *repository.QuotaRepository, providerRegistry *tool.Registry, cfg *config.Config) *MountUseCase {
 	return &MountUseCase{
 		mountRepo:        mountRepo,
 		providerRepo:     providerRepo,
 		quotaRepo:        quotaRepo,
 		providerRegistry: providerRegistry,
+		config:           cfg,
 	}
 }
 
@@ -59,6 +63,10 @@ func NewMountUseCase(mountRepo *repository.MountRepository, providerRepo *reposi
 func (u *MountUseCase) CreateMount(ctx context.Context, mount entity.MountPoint) (*entity.MountPoint, error) {
 	mode := entity.QuotaMode(strings.ToLower(strings.TrimSpace(mount.QuotaMode)))
 	mount.QuotaMode = string(mode)
+	mount.MountPath = normalizeOpenListMountPath(mount.MountPath)
+	if mount.MountPath == "" {
+		return nil, ErrMountPathRequired
+	}
 
 	if err := u.validateMountConfig(ctx, &mount, mode); err != nil {
 		return nil, err
@@ -81,7 +89,12 @@ func (u *MountUseCase) ListMountsByProvider(ctx context.Context, providerAccount
 
 // ListAllMounts 查询所有挂载点
 func (u *MountUseCase) ListAllMounts(ctx context.Context) ([]entity.MountPoint, error) {
-	return u.mountRepo.ListAllMountPoints()
+	accounts, err := u.listScopedProviders()
+	if err != nil {
+		return nil, err
+	}
+
+	return u.mountRepo.ListMountPointsByProviderAccountIDs(providerIDs(accounts))
 }
 
 // UpdateMount 更新挂载点（支持修改名称、配额模式及模式关联字段）
@@ -90,9 +103,19 @@ func (u *MountUseCase) UpdateMount(ctx context.Context, mount entity.MountPoint)
 	if err != nil {
 		return nil, err
 	}
+	if err := u.ensureProviderInCurrentScope(existing.ProviderAccountID); err != nil {
+		return nil, err
+	}
 
 	if mount.Name != "" {
 		existing.Name = mount.Name
+	}
+	if mount.MountPath != "" {
+		normalizedMountPath := normalizeOpenListMountPath(mount.MountPath)
+		if normalizedMountPath == "" {
+			return nil, ErrMountPathRequired
+		}
+		existing.MountPath = normalizedMountPath
 	}
 
 	// 检查是否要修改配额模式
@@ -146,8 +169,16 @@ func (u *MountUseCase) UpdateMount(ctx context.Context, mount entity.MountPoint)
 
 // DeleteMount 删除挂载点
 func (u *MountUseCase) DeleteMount(ctx context.Context, mountID uint) error {
+	mount, err := u.mountRepo.GetMountPoint(mountID)
+	if err != nil {
+		return err
+	}
+	if err := u.ensureProviderInCurrentScope(mount.ProviderAccountID); err != nil {
+		return err
+	}
+
 	// 检查是否有其他挂载点继承自该挂载点
-	mounts, err := u.mountRepo.ListAllMountPoints()
+	mounts, err := u.ListAllMounts(ctx)
 	if err != nil {
 		return err
 	}
@@ -167,14 +198,30 @@ func (u *MountUseCase) SyncMountQuota(ctx context.Context, mountID uint) (MountQ
 	return u.resolveMountQuota(ctx, mountID, true)
 }
 
-// resolveMountQuota 是一个用于解析挂载点配额的方法
-func (u *MountUseCase) resolveMountQuota(ctx context.Context, mountID uint, syncRemote bool) (MountQuotaResult, error) {
-	mount, err := u.mountRepo.GetMountPoint(mountID)
+func (u *MountUseCase) GetMountForWebDAV(ctx context.Context, mountID uint) (*entity.MountPoint, error) {
+	return u.getActiveScopedMount(mountID)
+}
+
+func (u *MountUseCase) GetMountQuotaReadonly(ctx context.Context, mountID uint) (MountQuotaResult, error) {
+	mount, err := u.getActiveScopedMount(mountID)
 	if err != nil {
 		return MountQuotaResult{}, err
 	}
-	if !mount.Enabled {
-		return MountQuotaResult{}, ErrMountDisabled
+	return u.GetMountQuotaReadonlyForMount(ctx, mount)
+}
+
+func (u *MountUseCase) GetMountQuotaReadonlyForMount(ctx context.Context, mount *entity.MountPoint) (MountQuotaResult, error) {
+	if mount == nil {
+		return MountQuotaResult{}, gorm.ErrRecordNotFound
+	}
+	return u.resolveByMode(ctx, mount, false, map[uint]struct{}{})
+}
+
+// resolveMountQuota 是一个用于解析挂载点配额的方法
+func (u *MountUseCase) resolveMountQuota(ctx context.Context, mountID uint, syncRemote bool) (MountQuotaResult, error) {
+	mount, err := u.getActiveScopedMount(mountID)
+	if err != nil {
+		return MountQuotaResult{}, err
 	}
 
 	result, err := u.resolveByMode(ctx, mount, syncRemote, map[uint]struct{}{})
@@ -221,6 +268,20 @@ func (u *MountUseCase) resolveMountQuota(ctx context.Context, mountID uint, sync
 		zap.Int64("available", result.Quota.Available),
 	)
 	return result, nil
+}
+
+func (u *MountUseCase) getActiveScopedMount(mountID uint) (*entity.MountPoint, error) {
+	mount, err := u.mountRepo.GetMountPoint(mountID)
+	if err != nil {
+		return nil, err
+	}
+	if err := u.ensureProviderInCurrentScope(mount.ProviderAccountID); err != nil {
+		return nil, err
+	}
+	if !mount.Enabled {
+		return nil, ErrMountDisabled
+	}
+	return mount, nil
 }
 
 // resolveByMode 根据挂载点的配额模式递归解析最终配额结果。
@@ -324,7 +385,7 @@ func (u *MountUseCase) resolveRealQuota(ctx context.Context, mount *entity.Mount
 	if mount.ProviderAccountID == 0 {
 		return entity.Quota{}, ErrMountProviderRequired
 	}
-	account, err := u.providerRepo.GetProviderAccount(mount.ProviderAccountID)
+	account, err := u.getScopedProviderAccount(mount.ProviderAccountID)
 	if err != nil {
 		return entity.Quota{}, err
 	}
@@ -369,7 +430,7 @@ func (u *MountUseCase) resolveRealQuota(ctx context.Context, mount *entity.Mount
 
 // getAllowedMax 获取允许的最大挂载配额
 func (u *MountUseCase) getAllowedMax(ctx context.Context, mount *entity.MountPoint, syncRemote bool) (int64, error) {
-	account, err := u.providerRepo.GetProviderAccount(mount.ProviderAccountID)
+	account, err := u.getScopedProviderAccount(mount.ProviderAccountID)
 	if err != nil {
 		return 0, err
 	}
@@ -403,7 +464,7 @@ func (u *MountUseCase) validateMountConfig(ctx context.Context, mount *entity.Mo
 		if mount.ProviderAccountID == 0 {
 			return ErrMountProviderRequired
 		}
-		account, err := u.providerRepo.GetProviderAccount(mount.ProviderAccountID)
+		account, err := u.getScopedProviderAccount(mount.ProviderAccountID)
 		if err != nil {
 			return err
 		}
@@ -418,6 +479,9 @@ func (u *MountUseCase) validateMountConfig(ctx context.Context, mount *entity.Mo
 		}
 		parent, err := u.mountRepo.GetMountPoint(*mount.InheritFromID)
 		if err != nil {
+			return err
+		}
+		if err := u.ensureProviderInCurrentScope(parent.ProviderAccountID); err != nil {
 			return err
 		}
 		if strings.ToLower(parent.QuotaMode) != string(entity.QuotaModeReal) {
@@ -436,7 +500,7 @@ func (u *MountUseCase) validateMountConfig(ctx context.Context, mount *entity.Mo
 		if mount.VirtualUsed > mount.VirtualTotal {
 			return ErrMountVirtualUsedInvalid
 		}
-		account, err := u.providerRepo.GetProviderAccount(mount.ProviderAccountID)
+		account, err := u.getScopedProviderAccount(mount.ProviderAccountID)
 		if err != nil {
 			return err
 		}
@@ -466,6 +530,9 @@ func (u *MountUseCase) validateNoCycle(startID uint, candidateID uint) error {
 			}
 			return err
 		}
+		if err := u.ensureProviderInCurrentScope(current.ProviderAccountID); err != nil {
+			return err
+		}
 		if current.InheritFromID == nil {
 			return nil
 		}
@@ -475,7 +542,8 @@ func (u *MountUseCase) validateNoCycle(startID uint, candidateID uint) error {
 }
 
 func (u *MountUseCase) resolveProvider(account *entity.ProviderAccount) (interfaces.Provider, error) {
-	if providerInstance, ok := u.providerRegistry.Get(account.Name); ok {
+	key := providerRegistryKey(account)
+	if providerInstance, ok := u.providerRegistry.Get(key); ok {
 		return providerInstance, nil
 	}
 
@@ -483,8 +551,61 @@ func (u *MountUseCase) resolveProvider(account *entity.ProviderAccount) (interfa
 	if providerInstance == nil {
 		return nil, ErrProviderNotFound
 	}
-	_ = u.providerRegistry.Register(account.Name, providerInstance)
+	_ = u.providerRegistry.Register(key, providerInstance)
 	return providerInstance, nil
+}
+
+func (u *MountUseCase) currentOpenListScope() string {
+	return config.NormalizeBaseURLScope(u.config.OpenList.BaseURL)
+}
+
+func (u *MountUseCase) listScopedProviders() ([]entity.ProviderAccount, error) {
+	scope := u.currentOpenListScope()
+	if err := u.providerRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return nil, err
+	}
+	return u.providerRepo.ListProviderAccountsByOpenList(scope)
+}
+
+func (u *MountUseCase) getScopedProviderAccount(providerAccountID uint) (*entity.ProviderAccount, error) {
+	scope := u.currentOpenListScope()
+	if err := u.providerRepo.AssignEmptyOpenListScope(scope); err != nil {
+		return nil, err
+	}
+	return u.providerRepo.GetProviderAccountByOpenList(providerAccountID, scope)
+}
+
+func (u *MountUseCase) ensureProviderInCurrentScope(providerAccountID uint) error {
+	_, err := u.getScopedProviderAccount(providerAccountID)
+	return err
+}
+
+func providerIDs(accounts []entity.ProviderAccount) []uint {
+	ids := make([]uint, 0, len(accounts))
+	for _, account := range accounts {
+		ids = append(ids, account.ID)
+	}
+	return ids
+}
+
+func normalizeOpenListMountPath(value string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(value), "\\", "/")
+	if normalized == "" {
+		return ""
+	}
+
+	if !strings.HasPrefix(normalized, "/") {
+		normalized = "/" + normalized
+	}
+
+	normalized = strings.Join(strings.FieldsFunc(normalized, func(r rune) bool {
+		return r == '/'
+	}), "/")
+	if normalized == "" {
+		return "/"
+	}
+
+	return "/" + strings.Trim(strings.TrimSpace(normalized), "/")
 }
 
 // buildMountProviderByNetDisk 根据网络磁盘类型创建相应的Provider接口实现

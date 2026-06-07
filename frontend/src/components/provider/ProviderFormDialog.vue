@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import LocalPathInput from '@/components/common/LocalPathInput.vue'
 import type { ProviderRecord } from '@/types/provider'
 
 const { t } = useI18n()
@@ -197,7 +198,12 @@ function handleSubmit() {
         <!-- Local storage path -->
         <div v-if="formData.net_disk === 'local'" class="form-group">
           <label>{{ t('provider_form.local_path') }}</label>
-          <input v-model="localPath" type="text" :placeholder="t('provider_form.local_path_placeholder')" />
+          <LocalPathInput
+            v-model="localPath"
+            mode="directory"
+            :placeholder="t('provider_form.local_path_placeholder')"
+            :title="t('provider_form.local_path')"
+          />
           <small v-html="t('provider_form.local_path_hint')"></small>
         </div>
 

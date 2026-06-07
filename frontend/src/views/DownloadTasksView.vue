@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import LocalPathInput from '@/components/common/LocalPathInput.vue'
+import OpenListPathPickerDialog from '@/components/common/OpenListPathPickerDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getTaskDetail, retryTask, openFile, openFileLocation } from '@/api/task'
@@ -15,6 +17,7 @@ const sourcePath = ref('')
 const targetDir = ref(store.defaultDownloadDir)
 const creating = ref(false)
 const createError = ref('')
+const sourcePickerVisible = ref(false)
 
 async function handleCreate() {
   if (!sourcePath.value.trim()) return
@@ -36,6 +39,11 @@ async function handleCreate() {
   } finally {
     creating.value = false
   }
+}
+
+function handleSourcePicked(path: string) {
+  sourcePath.value = path
+  sourcePickerVisible.value = false
 }
 
 // ── Task list ──
@@ -396,17 +404,21 @@ function formatTime(t: string | null | undefined): string {
     <section class="panel create-panel">
       <div class="create-form">
         <div class="create-form__field">
-          <input
-            v-model="sourcePath"
-            :placeholder="t('tasks.source_path_placeholder')"
-            @keyup.enter="handleCreate"
-          />
+          <div class="create-form__field-wrap">
+            <input
+              v-model="sourcePath"
+              :placeholder="t('tasks.source_path_placeholder')"
+              @keyup.enter="handleCreate"
+            />
+            <button class="btn btn--sm" @click="sourcePickerVisible = true">{{ t('tasks.browse_source') }}</button>
+          </div>
         </div>
         <div class="create-form__field">
-          <input
+          <LocalPathInput
             v-model="targetDir"
             :placeholder="t('tasks.target_dir_placeholder')"
-            @keyup.enter="handleCreate"
+            mode="directory"
+            :title="t('tasks.download_dir')"
           />
         </div>
         <button
@@ -421,6 +433,13 @@ function formatTime(t: string | null | undefined): string {
         {{ createError }}
       </div>
     </section>
+
+    <OpenListPathPickerDialog
+      :visible="sourcePickerVisible"
+      :initial-path="sourcePath || '/'"
+      @close="sourcePickerVisible = false"
+      @select="handleSourcePicked"
+    />
 
     <div class="toolbar">
       <div class="toolbar__tabs">
@@ -477,7 +496,7 @@ function formatTime(t: string | null | undefined): string {
               class="task-row__open"
               :class="{ 'task-row__open--loading': openingId === t.TaskID }"
               @click.stop="handleOpenFile(t.TaskID)"
-              data-tooltip="打开文件"
+              :data-tooltip="$t('tasks.open_file')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
@@ -486,7 +505,7 @@ function formatTime(t: string | null | undefined): string {
               class="task-row__open"
               :class="{ 'task-row__open--loading': openingId === t.TaskID }"
               @click.stop="handleOpenFileLocation(t.TaskID)"
-              data-tooltip="在文件夹中显示"
+              :data-tooltip="$t('tasks.open_file_location')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </span>
@@ -616,6 +635,16 @@ function formatTime(t: string | null | undefined): string {
 
 .create-form__field {
   flex: 1;
+}
+
+.create-form__field-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.create-form__field-wrap .btn--sm {
+  flex-shrink: 0;
 }
 
 .create-form__field input {
@@ -1099,6 +1128,11 @@ function formatTime(t: string | null | undefined): string {
 
   .create-form__field {
     width: 100%;
+  }
+
+  .create-form__field-wrap {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .create-panel {

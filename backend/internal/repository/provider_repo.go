@@ -51,6 +51,30 @@ func (repo *ProviderRepository) ListProviderAccounts() ([]entity.ProviderAccount
 	return providerAccounts, nil
 }
 
+func (repo *ProviderRepository) AssignEmptyOpenListScope(scope string) error {
+	return repo.db.Model(&entity.ProviderAccount{}).
+		Where("openlist_base_url = '' OR openlist_base_url IS NULL").
+		Update("openlist_base_url", scope).Error
+}
+
+func (repo *ProviderRepository) GetProviderAccountByOpenList(id uint, scope string) (*entity.ProviderAccount, error) {
+	var providerAccount entity.ProviderAccount
+	err := repo.db.Where("id = ? AND openlist_base_url = ?", id, scope).First(&providerAccount).Error
+	if err != nil {
+		return nil, err
+	}
+	return &providerAccount, nil
+}
+
+func (repo *ProviderRepository) ListProviderAccountsByOpenList(scope string) ([]entity.ProviderAccount, error) {
+	var providerAccounts []entity.ProviderAccount
+	err := repo.db.Where("openlist_base_url = ?", scope).Find(&providerAccounts).Error
+	if err != nil {
+		return nil, err
+	}
+	return providerAccounts, nil
+}
+
 // 按 provider 标识查询 ProviderAccount，优先按 name，兜底按 net_disk
 func (repo *ProviderRepository) GetProviderAccountByProvider(provider string) (*entity.ProviderAccount, error) {
 	var providerAccount entity.ProviderAccount

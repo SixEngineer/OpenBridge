@@ -66,18 +66,14 @@ const providerMounts = computed(() => {
 
 // ── Create Mount mode ──
 const showCreateForm = ref(false)
-const quotaMode = ref<'real' | 'inherit' | 'virtual'>('real')
+const quotaMode = ref<'real' | 'virtual'>('real')
 const virtualTotalInput = ref('')
+const mountPathInput = ref('')
 const virtualTotalMB = computed(() => {
   const n = parseInt(virtualTotalInput.value, 10)
   return isNaN(n) || n <= 0 ? undefined : n
 })
-const inheritParentId = ref<number | null>(null)
-const availableParents = computed(() => {
-  return store.mounts.filter(m =>
-    m.mode === 'real' && m.providerId !== selectedProviderId.value
-  )
-})
+const normalizedMountPath = computed(() => normalizeMountPath(mountPathInput.value))
 
 // ── Per-mount quota cache ──
 interface MountQuotaCache {
@@ -99,32 +95,25 @@ function getMountCache(mountId: number): MountQuotaCache {
 const editingMountId = ref<number | null>(null)
 const editForm = reactive<{
   name: string
-  quota_mode: 'real' | 'inherit' | 'virtual'
+  mount_path: string
+  quota_mode: 'real' | 'virtual'
   virtual_total: number
   virtual_used: number
-  inherit_from_id: number | null
 }>({
   name: '',
+  mount_path: '',
   quota_mode: 'real',
   virtual_total: 0,
   virtual_used: 0,
-  inherit_from_id: null,
-})
-
-// 编辑时可选的继承父挂载点（排除自己和子挂载点链）
-const editAvailableParents = computed(() => {
-  return store.mounts.filter(m =>
-    m.mode === 'real' && m.id !== editingMountId.value
-  )
 })
 
 function startEdit(mount: MountPoint) {
   editingMountId.value = mount.id
   editForm.name = mount.name
-  editForm.quota_mode = mount.quota_mode
+  editForm.mount_path = mount.mount_path
+  editForm.quota_mode = mount.quota_mode === 'virtual' ? 'virtual' : 'real'
   editForm.virtual_total = mount.virtual_total
   editForm.virtual_used = mount.virtual_used
-  editForm.inherit_from_id = mount.inherit_from_id ?? null
 }
 
 // 编辑中切换模式到 virtual 时，自动填入 real 的当前配额值
@@ -144,7 +133,14 @@ function cancelEdit() {
 async function handleEditSave(mountId: number) {
   const mount = store.allMounts.find(m => m.id === mountId)
   if (!mount) return
-  const payload: Partial<MountPoint> = { name: editForm.name }
+  const payload: Partial<MountPoint> = {
+    name: editForm.name,
+    mount_path: normalizeMountPath(editForm.mount_path),
+  }
+  if (!payload.mount_path) {
+    showStatus(t('quota.mount_path_required'), true)
+    return
+  }
   // 判断模式是否改变
   const modeChanged = editForm.quota_mode !== mount.quota_mode
   if (modeChanged) {
@@ -153,8 +149,6 @@ async function handleEditSave(mountId: number) {
   if (editForm.quota_mode === 'virtual') {
     payload.virtual_total = editForm.virtual_total
     payload.virtual_used = editForm.virtual_used
-  } else if (editForm.quota_mode === 'inherit') {
-    payload.inherit_from_id = editForm.inherit_from_id ?? undefined
   }
   const result = await store.updateMountById(mountId, payload)
   if (result) {
@@ -201,7 +195,6 @@ async function handleSyncMount(mountId: number) {
       cache.quota = res.data.quota
       cache.mode = res.data.mode
       cache.extra = {
-        inherit_chain: res.data.inherit_chain,
         virtual_config: res.data.virtual_config,
       }
       showStatus(t('quota.sync_success'))
@@ -225,7 +218,6 @@ async function handleQueryMount(mountId: number) {
       cache.quota = res.data.quota
       cache.mode = res.data.mode
       cache.extra = {
-        inherit_chain: res.data.inherit_chain,
         virtual_config: res.data.virtual_config,
       }
     }
@@ -239,15 +231,19 @@ async function handleQueryMount(mountId: number) {
 async function handleCreateMount() {
   const p = selectedProvider.value
   if (!p) return
+  if (!normalizedMountPath.value) {
+    showStatus(t('quota.mount_path_required'), true)
+    return
+  }
   const rootPath = p.net_disk === 'local' ? p.account_id : undefined
   const mount = await store.createMountForProvider(
-    p.id, p.name, p.provider_type, rootPath,
-    quotaMode.value, virtualTotalMB.value,
-    quotaMode.value === 'inherit' ? inheritParentId.value ?? undefined : undefined
+    p.id, p.name, p.provider_type, normalizedMountPath.value, rootPath,
+    quotaMode.value, virtualTotalMB.value
   )
   if (mount) {
     showStatus(t('quota.mount_created'))
     showCreateForm.value = false
+    mountPathInput.value = ''
     // Auto-query the new mount's quota
     await handleQueryMount(mount.id)
   } else {
@@ -281,8 +277,7 @@ function formatQuotaMB(mb: number): string {
 
 function displayQuotaMB(mb: number, mountMode?: string | null): string {
   // 虚拟模式值就是 MB，不应用 mock 缩放
-  // 继承模式配额来自父 provider，值已经是正确单位，不额外缩放
-  if (mountMode === 'virtual' || mountMode === 'inherit') {
+  if (mountMode === 'virtual') {
     return formatQuotaMB(mb)
   }
   const scale = selectedProvider.value?.provider_type === 'mock' ? 1024 : 1
@@ -292,6 +287,13 @@ function displayQuotaMB(mb: number, mountMode?: string | null): string {
 function formatTime(t: string | null | undefined): string {
   if (!t) return '—'
   return new Date(t).toLocaleString(locale.value)
+}
+
+function normalizeMountPath(value: string): string {
+  const normalized = value.trim().replace(/\\/g, '/')
+  if (!normalized) return ''
+  const segments = normalized.split('/').filter(Boolean)
+  return segments.length ? `/${segments.join('/')}` : '/'
 }
 
 // ── Loading state ──
@@ -392,6 +394,18 @@ watch(selectedProviderId, async () => {
 
     <!-- Create Mount form -->
     <div v-if="selectedProvider && showCreateForm" class="mode-section">
+      <div class="edit-field">
+        <label>{{ t('quota.mount_path_label') }}</label>
+        <input
+          v-model="mountPathInput"
+          type="text"
+          class="edit-input"
+          :placeholder="t('quota.mount_path_placeholder')"
+        />
+        <p class="field-hint">
+          {{ t('quota.mount_path_hint') }}
+        </p>
+      </div>
       <div class="mode-options">
         <label class="mode-option">
           <input type="radio" v-model="quotaMode" value="real" />
@@ -407,25 +421,6 @@ watch(selectedProviderId, async () => {
             <span class="mode-option__desc">{{ t('quota.virtual_desc') }}</span>
           </div>
         </label>
-        <label class="mode-option">
-          <input type="radio" v-model="quotaMode" value="inherit" />
-          <div class="mode-option__body">
-            <span class="mode-option__title">{{ t('quota.inherit') }}</span>
-            <span class="mode-option__desc">{{ t('quota.inherit_desc') }}</span>
-          </div>
-        </label>
-      </div>
-      <div v-if="quotaMode === 'inherit' && availableParents.length === 0" class="mode-hint">
-        {{ t('quota.inherit_no_parents') }}
-      </div>
-      <div v-if="quotaMode === 'inherit' && availableParents.length > 0" class="inherit-select">
-        <label>{{ t('quota.inherit_parent') }}</label>
-        <select v-model="inheritParentId" class="inherit-select__field">
-          <option :value="null" disabled>{{ t('quota.inherit_select_hint') }}</option>
-          <option v-for="mp in availableParents" :key="mp.id" :value="mp.id">
-            {{ mp.providerName }}
-          </option>
-        </select>
       </div>
       <div v-if="quotaMode === 'virtual'" class="virtual-input">
         <label>{{ t('quota.virtual_total') }}</label>
@@ -440,7 +435,7 @@ watch(selectedProviderId, async () => {
       <div class="create-actions">
         <button
           class="btn btn--primary"
-          :disabled="store.mountCreating || backendStatus === 'error' || (quotaMode === 'virtual' && !virtualTotalMB) || (quotaMode === 'inherit' && !inheritParentId)"
+          :disabled="store.mountCreating || backendStatus === 'error' || (quotaMode === 'virtual' && !virtualTotalMB)"
           @click="handleCreateMount"
         >
           {{ store.mountCreating ? t('quota.creating_mount') : t('quota.create_mount') }}
@@ -474,9 +469,6 @@ watch(selectedProviderId, async () => {
             <span class="mode-badge" :class="`mode-badge--${mount.quota_mode}`">
               {{ t('quota.' + mount.quota_mode) }}
             </span>
-            <span v-if="getMountCache(mount.id).extra?.inherit_chain?.length" class="inherit-chain">
-              &larr; {{ getMountCache(mount.id).extra!.inherit_chain!.join(', ') }}
-            </span>
           </div>
           <div class="mount-card__header-right">
             <button v-if="store.isAdmin" class="btn btn--small btn--secondary" @click="startEdit(mount)" :disabled="backendStatus === 'error'">
@@ -490,6 +482,10 @@ watch(selectedProviderId, async () => {
 
         <!-- Quota stats (when not editing) -->
         <template v-if="editingMountId !== mount.id">
+          <div class="mount-meta">
+            <span class="mount-meta__label">{{ t('quota.mount_path_label') }}</span>
+            <code class="mount-meta__value">{{ mount.mount_path }}</code>
+          </div>
           <div v-if="getMountCache(mount.id).quota" class="quota-stats">
             <div class="quota-stat">
               <span class="quota-stat__label">{{ t('quota.total') }}</span>
@@ -539,6 +535,18 @@ watch(selectedProviderId, async () => {
             <label>{{ t('quota.edit_name') }}</label>
             <input v-model="editForm.name" type="text" class="edit-input" />
           </div>
+          <div class="edit-field">
+            <label>{{ t('quota.mount_path_label') }}</label>
+            <input
+              v-model="editForm.mount_path"
+              type="text"
+              class="edit-input"
+              :placeholder="t('quota.mount_path_placeholder')"
+            />
+            <p class="field-hint">
+              {{ t('quota.mount_path_hint') }}
+            </p>
+          </div>
 
           <!-- Mode selector -->
           <div class="edit-field">
@@ -558,28 +566,7 @@ watch(selectedProviderId, async () => {
                   <span class="mode-option__desc">{{ t('quota.virtual_desc') }}</span>
                 </div>
               </label>
-              <label class="mode-option">
-                <input type="radio" v-model="editForm.quota_mode" value="inherit" />
-                <div class="mode-option__body">
-                  <span class="mode-option__title">{{ t('quota.inherit') }}</span>
-                  <span class="mode-option__desc">{{ t('quota.inherit_desc') }}</span>
-                </div>
-              </label>
             </div>
-          </div>
-
-          <!-- Inherit parent selector -->
-          <div v-if="editForm.quota_mode === 'inherit'" class="edit-field">
-            <label>{{ t('quota.inherit_parent') }}</label>
-            <div v-if="editAvailableParents.length === 0" class="mode-hint">
-              {{ t('quota.inherit_no_parents') }}
-            </div>
-            <select v-else v-model.number="editForm.inherit_from_id" class="edit-input">
-              <option :value="null" disabled>{{ t('quota.inherit_select_hint') }}</option>
-              <option v-for="mp in editAvailableParents" :key="mp.id" :value="mp.id">
-                {{ mp.providerName }}
-              </option>
-            </select>
           </div>
 
           <!-- Virtual fields -->
@@ -924,6 +911,29 @@ watch(selectedProviderId, async () => {
   margin-top: 16px;
 }
 
+.mount-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.mount-meta__label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mount-meta__value {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  word-break: break-all;
+}
+
 .mode-badge {
   padding: 3px 10px;
   border-radius: 12px;
@@ -932,18 +942,10 @@ watch(selectedProviderId, async () => {
   text-transform: capitalize;
 }
 .mode-badge--real { background: #d1fae5; color: #065f46; }
-.mode-badge--inherit { background: #dbeafe; color: #1e40af; }
 .mode-badge--virtual { background: #fef3c7; color: #92400e; }
 
 [data-theme="dark"] .mode-badge--real { background: rgba(6,95,70,0.3); color: #6ee7b7; }
-[data-theme="dark"] .mode-badge--inherit { background: rgba(30,64,175,0.3); color: #93c5fd; }
 [data-theme="dark"] .mode-badge--virtual { background: rgba(146,64,14,0.3); color: #fcd34d; }
-
-.inherit-chain {
-  font-size: 12px;
-  color: var(--muted);
-  font-family: 'SFMono-Regular', Consolas, monospace;
-}
 
 /* ── Quota stats ── */
 .quota-stats {
@@ -1090,34 +1092,6 @@ watch(selectedProviderId, async () => {
   box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
 }
 
-.inherit-select {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.inherit-select label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-}
-.inherit-select__field {
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  width: 240px;
-  background: var(--surface);
-  color: var(--text);
-  transition: border-color 0.2s;
-}
-.inherit-select__field:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
-}
-
 .mode-hint {
   margin-top: 16px;
   padding: 10px 16px;
@@ -1158,6 +1132,13 @@ watch(selectedProviderId, async () => {
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .edit-input {
@@ -1377,15 +1358,13 @@ watch(selectedProviderId, async () => {
     width: 100%;
   }
 
-  .virtual-input,
-  .inherit-select {
+  .virtual-input {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
 
-  .virtual-input__field,
-  .inherit-select__field {
+  .virtual-input__field {
     width: 100%;
   }
 

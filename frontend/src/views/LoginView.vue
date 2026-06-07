@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { userLogin } from '@/api/user'
+import { getSessionStatus, userLogin } from '@/api/user'
 import { useConsoleStore } from '@/stores/console'
 
 const router = useRouter()
@@ -34,7 +34,11 @@ async function handleLogin() {
   try {
     const res = await userLogin({ username: name, password: pass })
     if (res.code === 1000) {
-      store.login(name)
+      const sessionStatus = await getSessionStatus()
+      if (!sessionStatus.data.authenticated) {
+        throw new Error(t('login.error_session'))
+      }
+      store.login(sessionStatus.data.username || name, sessionStatus.data)
       await store.fetchCurrentUser()
       router.push('/dashboard')
     } else {
@@ -46,6 +50,32 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+function mapLogoutReason(reason: string) {
+  switch (reason) {
+    case 'expired':
+      return t('login.reason_expired')
+    case 'openlist_token_missing':
+    case 'openlist_auth_invalid':
+      return t('login.reason_openlist')
+    case 'openlist_base_url_missing':
+    case 'source_changed':
+      return t('login.reason_source_changed')
+    case 'session_changed':
+      return t('login.reason_session_changed')
+    case 'manual':
+      return ''
+    default:
+      return reason ? t('login.reason_backend_changed') : ''
+  }
+}
+
+onMounted(() => {
+  const reason = store.consumeLogoutReason()
+  if (reason) {
+    errorMsg.value = mapLogoutReason(reason)
+  }
+})
 </script>
 
 <template>

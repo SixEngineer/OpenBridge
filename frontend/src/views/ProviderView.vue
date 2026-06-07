@@ -46,6 +46,31 @@ function displayQuota(mb: number, providerType: string): string {
   return formatProviderQuota(mb * scale)
 }
 
+function quotaDisplay(provider: ProviderRecord) {
+  const quota = store.getEffectiveProviderQuota(provider)
+  if (!quota) {
+    return {
+      total: '0 B',
+      used: '0 B',
+      available: '0 B',
+    }
+  }
+
+  if (quota.mode === 'virtual') {
+    return {
+      total: formatProviderQuota(quota.total),
+      used: formatProviderQuota(quota.used),
+      available: formatProviderQuota(quota.available),
+    }
+  }
+
+  return {
+    total: displayQuota(quota.total, quota.providerType),
+    used: displayQuota(quota.used, quota.providerType),
+    available: displayQuota(quota.available, quota.providerType),
+  }
+}
+
 function openAddDialog() {
   editingProvider.value = null
   dialogVisible.value = true
@@ -102,6 +127,7 @@ async function handleDelete(provider: ProviderRecord) {
 
 onMounted(() => {
   store.fetchProviders()
+  store.fetchAllMounts()
 })
 </script>
 
@@ -155,9 +181,9 @@ onMounted(() => {
 
         <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
         <p class="provider-card__text">
-          {{ t('providers.total') }} {{ displayQuota(provider.total_quota, provider.provider_type) }}<br>
-          {{ t('providers.used') }} {{ displayQuota(provider.used_quota, provider.provider_type) }}<br>
-          {{ t('providers.available') }} {{ displayQuota(provider.available_quota, provider.provider_type) }}
+          {{ t('providers.total') }} {{ quotaDisplay(provider).total }}<br>
+          {{ t('providers.used') }} {{ quotaDisplay(provider).used }}<br>
+          {{ t('providers.available') }} {{ quotaDisplay(provider).available }}
         </p>
         
         <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>

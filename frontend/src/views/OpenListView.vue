@@ -60,10 +60,14 @@ function sortIndicator(field: string): string {
 // Download dialog
 const downloadDialogVisible = ref(false)
 const downloadFilePath = ref('')
+const downloadItemIsDir = ref(false)
+const downloadItemName = ref('')
 
 function openDownload(file: any) {
   const fullPath = (currentPath.value.replace(/\/+$/, '') + '/' + file.name).replace(/\/+/g, '/')
   downloadFilePath.value = fullPath
+  downloadItemIsDir.value = Boolean(file.is_dir)
+  downloadItemName.value = file.name
   downloadDialogVisible.value = true
 }
 
@@ -183,11 +187,10 @@ onMounted(fetchFiles)
           <span class="file-row__time">{{ formatTime(f.modified) }}</span>
           <span class="file-row__action" @click.stop>
             <button
-              v-if="!f.is_dir"
               class="btn-download"
               @click="openDownload(f)"
             >
-              {{ t('openlist.download') }}
+              {{ f.is_dir ? t('openlist.download_folder') : t('openlist.download') }}
             </button>
           </span>
         </div>
@@ -201,6 +204,8 @@ onMounted(fetchFiles)
     <DownloadDialog
       :visible="downloadDialogVisible"
       :file-path="downloadFilePath"
+      :is-dir="downloadItemIsDir"
+      :item-name="downloadItemName"
       @close="downloadDialogVisible = false"
       @success="onDownloadSuccess"
     />

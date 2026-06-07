@@ -29,19 +29,37 @@ const endpoints = {
   storageFiles: '/storage/files',
   storageFile: '/storage/file',
 
+  // ── System ──
+  systemPickPath: '/system/pick-path',
+  systemMetrics: '/system/metrics',
+
   // ── Download / Task ──
   downloadTasks: '/download/tasks',
   downloadResolve: '/download/resolve',
+  downloadFolderZip: '/download/folder-zip',
   downloadTaskDetail: (taskId: string) => `/download/tasks/${taskId}` as const,
   downloadTaskRetry: (taskId: string) => `/download/tasks/${taskId}/retry` as const,
   downloadTaskOpen: (taskId: string) => `/download/tasks/${taskId}/open` as const,
   downloadTaskOpenLocation: (taskId: string) => `/download/tasks/${taskId}/open-location` as const,
   downloadAria2Status: '/download/aria2-status',
 
+  // ── Settings ──
+  settings: '/settings',
+  settingsOpenList: '/settings/openlist',
+  settingsAria2: '/settings/aria2',
+  settingsRclone: '/settings/rclone',
+
   // ── User ──
   userLogin: '/user/login',
   userReset: '/user/reset',
   userInfo: '/user/info',
+  userSessionStatus: '/user/session-status',
+
+  // ── Rclone ──
+  rcloneProfiles: '/rclone/profiles',
+  rcloneProfile: (id: number) => `/rclone/profiles/${id}` as const,
+  rcloneProfileApply: (id: number) => `/rclone/profiles/${id}/apply` as const,
+  rcloneProfileMount: (id: number) => `/rclone/profiles/${id}/mount` as const,
 } as const
 
 export default endpoints

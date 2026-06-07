@@ -176,6 +176,7 @@ func parseMountID(c *gin.Context) (uint, error) {
 func mapMountError(err error) (int, int) {
 	switch {
 	case errors.Is(err, usecase.ErrMountInvalidMode),
+		errors.Is(err, usecase.ErrMountPathRequired),
 		errors.Is(err, usecase.ErrMountProviderRequired),
 		errors.Is(err, usecase.ErrMountParentRequired),
 		errors.Is(err, usecase.ErrMountParentNotReal),

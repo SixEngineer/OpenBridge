@@ -63,15 +63,16 @@ func (u *DownloadUseCase) CreateTask(path string, dir string) (*entity.DownloadT
 	}
 
 	task := &entity.DownloadTask{
-		TaskID:     newTaskID(),
-		SourcePath: path,
-		DirectLink: directLink.DirectLink,
-		FileName:   directLink.Name,
-		FileSize:   directLink.Size,
-		Aria2GID:   gid,
-		Status:     "waiting",
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		TaskID:          newTaskID(),
+		OpenListBaseURL: config.NormalizeBaseURLScope(u.config.OpenList.BaseURL),
+		SourcePath:      path,
+		DirectLink:      directLink.DirectLink,
+		FileName:        directLink.Name,
+		FileSize:        directLink.Size,
+		Aria2GID:        gid,
+		Status:          "waiting",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	if err := u.downloadRepo.InsertTask(task); err != nil {
@@ -278,7 +279,9 @@ func (u *DownloadUseCase) OpenFileLocation(taskID string) (string, error) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("explorer", "/select,"+filePath)
+		// Opening the parent folder is more reliable than /select,<file>
+		// for names containing CJK punctuation or other shell-sensitive characters.
+		cmd = exec.Command("explorer", filepath.Dir(filePath))
 	case "darwin":
 		cmd = exec.Command("open", "-R", filePath)
 	default:

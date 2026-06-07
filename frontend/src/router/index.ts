@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useConsoleStore } from '@/stores/console'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -21,22 +22,31 @@ const router = createRouter({
         { path: 'openlist', component: () => import('@/views/OpenListView.vue') },
         { path: 'providers', component: () => import('@/views/ProviderView.vue') },
         { path: 'tasks', component: () => import('@/views/DownloadTasksView.vue') },
-        { path: 'quota', component: () => import('@/views/QuotaView.vue') },
-        { path: 'settings', component: () => import('@/views/SettingsView.vue') },
-        { path: 'debug', component: () => import('@/views/DebugView.vue') },
+        { path: 'quota', component: () => import('@/views/QuotaView.vue'), meta: { adminOnly: true } },
+        { path: 'rclone', component: () => import('@/views/RcloneView.vue'), meta: { adminOnly: true } },
+        { path: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { adminOnly: true } },
+        { path: 'debug', component: () => import('@/views/DebugView.vue'), meta: { adminOnly: true } },
       ],
     },
   ],
 })
 
-// Auth guard: unauthenticated users are redirected to /login
-const AUTH_KEY = 'openbridge_auth'
-
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (to.meta.public) return true
-  const storedAuth = localStorage.getItem(AUTH_KEY)
-  if (storedAuth) return true
-  return '/login'
+
+  const store = useConsoleStore()
+  const valid = await store.validateSession({ forceRemote: true, touch: true })
+  if (!valid) return '/login'
+
+  if (store.userRole === null) {
+    await store.fetchCurrentUser()
+  }
+
+  if (to.meta.adminOnly && !store.isAdmin) {
+    return '/dashboard'
+  }
+
+  return true
 })
 
 export default router

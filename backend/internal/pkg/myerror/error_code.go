@@ -60,6 +60,8 @@ const (
 	ErrorCodeMountDeleteFailed = 1026 // Mount 删除失败
 	ErrorCodeMountUpdateFailed = 1027 // Mount 更新失败
 
-	ErrorCodeForbidden = 1028 // 权限不足
-	ErrorCodeDownloadOpenFailed = 1029 // 打开下载文件失败
+	ErrorCodeForbidden            = 1028 // 权限不足
+	ErrorCodeDownloadOpenFailed   = 1029 // 打开下载文件失败
+	ErrorCodeSettingsGetFailed    = 1030 // 获取系统配置失败
+	ErrorCodeSettingsUpdateFailed = 1031 // 更新系统配置失败
 )

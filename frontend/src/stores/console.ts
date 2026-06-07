@@ -18,7 +18,20 @@ import { alertItems, metricCards, systemStatuses, taskDigests } from '@/mock/das
 import { quotaRecords } from '@/mock/quota'
 
 import { createTask } from '@/api/task'
-import { getUserInfo } from '@/api/user'
+import { getSessionStatus, getUserInfo, type SessionStatus } from '@/api/user'
+import type { Router } from 'vue-router'
+import {
+  clearLocalSession,
+  clearLogoutReason,
+  isSessionExpired,
+  readLocalSession,
+  readLogoutReason,
+  readSessionTimeoutMinutes,
+  writeLocalSession,
+  writeLogoutReason,
+  writeSessionTimeoutMinutes,
+  type LocalSession,
+} from '@/utils/session'
 
 export const useConsoleStore = defineStore('console', () => {
   const metrics = ref(metricCards)
@@ -84,29 +97,80 @@ export const useConsoleStore = defineStore('console', () => {
   }
   const mounts = ref<MountInfo[]>([])
 
+  interface EffectiveProviderQuota {
+    total: number
+    used: number
+    available: number
+    mode: 'real' | 'virtual'
+    providerType: string
+  }
+
   const mountCreating = ref(false)
 
   // ── Auth state ──
-  const AUTH_KEY = 'openbridge_auth'
-  const storedAuth = (() => {
-    try {
-      const raw = localStorage.getItem(AUTH_KEY)
-      return raw ? JSON.parse(raw) : null
-    } catch { return null }
-  })()
-  const isLoggedIn = ref(storedAuth !== null)
-  const currentUser = ref(storedAuth?.username ?? '')
+  const localSession = ref<LocalSession | null>(readLocalSession())
+  const sessionTimeoutMinutes = ref(readSessionTimeoutMinutes())
+  const logoutReason = ref(readLogoutReason())
+  const isLoggedIn = computed(() => localSession.value !== null)
+  const currentUser = computed(() => localSession.value?.username ?? '')
+  const lastSessionCheckAt = ref(0)
+  let sessionMonitorStarted = false
+  let sessionMonitorTimer: number | null = null
 
-  function login(username: string) {
-    isLoggedIn.value = true
-    currentUser.value = username
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ username }))
+  function applySession(session: LocalSession | null) {
+    localSession.value = session
+    if (session) {
+      writeLocalSession(session)
+    } else {
+      clearLocalSession()
+    }
   }
 
-  function logout() {
-    isLoggedIn.value = false
-    currentUser.value = ''
-    localStorage.removeItem(AUTH_KEY)
+  function touchSessionActivity(now = Date.now()) {
+    if (!localSession.value) return
+    applySession({
+      ...localSession.value,
+      lastActiveAt: now,
+      timeoutMinutes: sessionTimeoutMinutes.value,
+    })
+  }
+
+  function login(username: string, status: SessionStatus) {
+    const now = Date.now()
+    clearLogoutReason()
+    logoutReason.value = ''
+    applySession({
+      username,
+      issuedAt: now,
+      lastActiveAt: now,
+      timeoutMinutes: sessionTimeoutMinutes.value,
+      backendFingerprint: status.fingerprint,
+      backendInstanceId: status.backend_instance_id,
+      openListBaseURL: status.openlist_base_url,
+    })
+    lastSessionCheckAt.value = now
+  }
+
+  function logout(reason = 'manual') {
+    applySession(null)
+    logoutReason.value = reason
+    writeLogoutReason(reason)
+    lastSessionCheckAt.value = 0
+    userRole.value = null
+    providers.value = []
+    allMounts.value = []
+    mounts.value = []
+  }
+
+  function setSessionTimeout(minutes: number) {
+    writeSessionTimeoutMinutes(minutes)
+    sessionTimeoutMinutes.value = readSessionTimeoutMinutes()
+    if (localSession.value) {
+      applySession({
+        ...localSession.value,
+        timeoutMinutes: sessionTimeoutMinutes.value,
+      })
+    }
   }
 
   // ── UI state ──
@@ -128,6 +192,56 @@ export const useConsoleStore = defineStore('console', () => {
   // OpenList 角色: 0=GENERAL, 1=GUEST, 2=ADMIN
   const isAdmin = computed(() => userRole.value === 2)
 
+  async function fetchSessionStatus() {
+    const res = await getSessionStatus()
+    return res.data
+  }
+
+  async function validateSession(options: { forceRemote?: boolean; touch?: boolean } = {}) {
+    const session = localSession.value
+    if (!session) return false
+
+    const now = Date.now()
+    if (isSessionExpired(session, now)) {
+      logout('expired')
+      return false
+    }
+
+    if (options.touch) {
+      touchSessionActivity(now)
+    }
+
+    const shouldCheckRemote = options.forceRemote || now-lastSessionCheckAt.value > 30_000
+    if (!shouldCheckRemote) {
+      return true
+    }
+
+    try {
+      const status = await fetchSessionStatus()
+      if (
+        !status.authenticated ||
+        status.fingerprint !== session.backendFingerprint ||
+        (status.username && status.username !== session.username)
+      ) {
+        logout(status.reason || 'session_changed')
+        return false
+      }
+
+      lastSessionCheckAt.value = now
+      return true
+    } catch (error) {
+      console.error('校验会话失败', error)
+      return true
+    }
+  }
+
+  function consumeLogoutReason() {
+    const reason = logoutReason.value
+    logoutReason.value = ''
+    clearLogoutReason()
+    return reason
+  }
+
   async function fetchCurrentUser() {
     try {
       const res = await getUserInfo()
@@ -139,10 +253,46 @@ export const useConsoleStore = defineStore('console', () => {
     }
   }
 
-  // 页面刷新时，如果已登录则自动获取用户角色和挂载点数据
-  if (isLoggedIn.value) {
+  async function bootstrapSession() {
+    if (!localSession.value) return
+    const valid = await validateSession({ forceRemote: true })
+    if (!valid) return
     fetchCurrentUser()
     fetchAllMounts()
+  }
+
+  function startSessionMonitor(router: Router) {
+    if (sessionMonitorStarted) return
+    sessionMonitorStarted = true
+
+    const ensureValidSession = async (forceRemote = false) => {
+      if (!localSession.value) return
+      const valid = await validateSession({ forceRemote, touch: true })
+      if (!valid && router.currentRoute.value.path !== '/login') {
+        router.replace('/login')
+      }
+    }
+
+    void bootstrapSession()
+    void ensureValidSession(true)
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        void ensureValidSession(true)
+      }
+    })
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === null) return
+      if (event.key === 'openbridge_auth' || event.key === 'openbridge_session_timeout_minutes') {
+        localSession.value = readLocalSession()
+        sessionTimeoutMinutes.value = readSessionTimeoutMinutes()
+      }
+    })
+
+    sessionMonitorTimer = window.setInterval(() => {
+      void ensureValidSession(true)
+    }, 30_000)
   }
 
   // ── Provider actions ──
@@ -217,6 +367,36 @@ export const useConsoleStore = defineStore('console', () => {
     return allMounts.value.filter(m => m.provider_account_id === providerId)
   }
 
+  function getEffectiveProviderQuota(providerOrId: ProviderRecord | number): EffectiveProviderQuota | null {
+    const provider = typeof providerOrId === 'number'
+      ? providers.value.find(p => p.id === providerOrId)
+      : providerOrId
+
+    if (!provider) return null
+
+    const virtualMount = allMounts.value
+      .filter(m => m.provider_account_id === provider.id && m.enabled && m.quota_mode === 'virtual')
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0]
+
+    if (virtualMount) {
+      return {
+        total: virtualMount.virtual_total,
+        used: virtualMount.virtual_used,
+        available: Math.max(virtualMount.virtual_total - virtualMount.virtual_used, 0),
+        mode: 'virtual',
+        providerType: provider.provider_type,
+      }
+    }
+
+    return {
+      total: provider.total_quota,
+      used: provider.used_quota,
+      available: provider.available_quota,
+      mode: 'real',
+      providerType: provider.provider_type,
+    }
+  }
+
   /** 持久化最近一次配额数据 */
   function saveQuotaData() {
     if (currentQuota.value) {
@@ -285,10 +465,10 @@ export const useConsoleStore = defineStore('console', () => {
     providerId: number,
     providerName: string,
     providerType: string,
+    mountPath: string,
     rootPath?: string,
     quotaMode: string = 'real',
-    virtualTotal?: number,
-    inheritFromId?: number
+    virtualTotal?: number
   ): Promise<MountPoint | null> {
     mountCreating.value = true
     try {
@@ -296,16 +476,13 @@ export const useConsoleStore = defineStore('console', () => {
         name: `${providerName} Mount`,
         provider_account_id: providerId,
         provider_type: providerType,
-        mount_path: `/mnt/${providerType}`,
+        mount_path: mountPath.trim(),
         provider_root_path: rootPath || '/',
-        quota_mode: quotaMode as 'real' | 'inherit' | 'virtual',
+        quota_mode: quotaMode as 'real' | 'virtual',
       }
       if (quotaMode === 'virtual' && virtualTotal !== undefined) {
         payload.virtual_total = virtualTotal
         payload.virtual_used = 0
-      }
-      if (quotaMode === 'inherit' && inheritFromId !== undefined) {
-        payload.inherit_from_id = inheritFromId
       }
       const res = await createMount(payload)
       if (res.code === 1000) {
@@ -408,6 +585,7 @@ export const useConsoleStore = defineStore('console', () => {
     mountCreating,
     allMounts,
     getMountsByProvider,
+    getEffectiveProviderQuota,
     fetchAllMounts,
     queryQuotaByMount,
     syncQuotaByMount,
@@ -422,6 +600,13 @@ export const useConsoleStore = defineStore('console', () => {
     currentUser,
     login,
     logout,
+    validateSession,
+    fetchSessionStatus,
+    startSessionMonitor,
+    sessionTimeoutMinutes,
+    setSessionTimeout,
+    logoutReason,
+    consumeLogoutReason,
     userRole,
     isAdmin,
     fetchCurrentUser,

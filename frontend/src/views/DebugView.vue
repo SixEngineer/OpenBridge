@@ -42,7 +42,7 @@ async function handleReset() {
   }
   resetting.value = true
   try {
-    await userReset()
+    await userReset('all')
     store.fetchProviders()
     store.fetchAllMounts()
     confirmReset.value = false

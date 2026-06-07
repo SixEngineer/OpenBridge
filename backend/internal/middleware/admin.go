@@ -3,8 +3,9 @@ package middleware
 import (
 	"encoding/json"
 	"net/http"
-	"openbridge/backend/internal/pkg/myerror"
 	"openbridge/backend/internal/pkg/logger"
+	"openbridge/backend/internal/pkg/myerror"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,9 +27,16 @@ type AdminChecker struct {
 
 func NewAdminChecker(baseURL string) *AdminChecker {
 	return &AdminChecker{
-		baseURL:  baseURL,
+		baseURL:  normalizeBaseURL(baseURL),
 		cacheTTL: 60 * time.Second,
 	}
+}
+
+func (c *AdminChecker) SetBaseURL(baseURL string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.baseURL = normalizeBaseURL(baseURL)
+	c.lastCheck = time.Time{}
 }
 
 // SetToken 更新 token（由登录后调用），同时清除缓存
@@ -37,6 +45,10 @@ func (c *AdminChecker) SetToken(token string) {
 	defer c.mu.Unlock()
 	c.token = token
 	c.lastCheck = time.Time{} // 清空缓存，下次强制重新检查
+}
+
+func normalizeBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
 }
 
 // InvalidateCache 清除缓存，下次请求强制重新检查
@@ -67,21 +79,21 @@ func (c *AdminChecker) fetchRole() (int, error) {
 		c.mu.Unlock()
 		return role, nil
 	}
+	baseURL := c.baseURL
+	token := c.token
 	c.mu.Unlock()
 
 	// 调用 OpenList API
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", c.baseURL+"/api/me", nil)
+	req, err := http.NewRequest("GET", baseURL+"/api/me", nil)
 	if err != nil {
 		return -1, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	c.mu.Lock()
-	if c.token != "" {
-		req.Header.Set("Authorization", c.token)
+	if token != "" {
+		req.Header.Set("Authorization", token)
 	}
-	c.mu.Unlock()
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -103,7 +115,7 @@ func (c *AdminChecker) fetchRole() (int, error) {
 	c.mu.Lock()
 	c.cachedRole = result.Data.Role
 	c.lastCheck = time.Now()
-	c.lastToken = c.token
+	c.lastToken = token
 	c.mu.Unlock()
 
 	return result.Data.Role, nil

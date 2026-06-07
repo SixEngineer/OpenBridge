@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MetricCard from '@/components/common/MetricCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -8,6 +8,7 @@ import { useConsoleStore } from '@/stores/console'
 import type { MetricCardData } from '@/types/dashboard'
 import { getProviderList } from '@/api/provider'
 import { getAria2Status } from '@/api/task'
+import { getSystemMetrics, type SystemMetrics } from '@/api/system'
 
 const store = useConsoleStore()
 const { t, locale } = useI18n()
@@ -16,22 +17,53 @@ const aria2Status = ref<'active' | 'error' | 'disabled'>('disabled')
 const quotaExpanded = ref(false)
 const mountsExpanded = ref(false)
 const quotasByProvider = computed(() =>
-  store.providers
-    .filter(p => p.total_quota > 0)
-    .map(p => {
-      // Mock providers store values in GB but backend reports as MB
-      const scale = p.provider_type === 'mock' ? 1024 : 1
-      return {
-        ...p,
-        total_quota: p.total_quota * scale,
-        used_quota: p.used_quota * scale,
-        available_quota: p.available_quota * scale,
+  store.providers.reduce<Array<{
+    id: number
+    name: string
+    provider_type: string
+    net_disk: string
+    account_id: string
+    status: string
+    total_quota: number
+    used_quota: number
+    available_quota: number
+    quota_mode: 'real' | 'virtual'
+    last_quota_sync_at?: string
+    last_error?: string
+    created_at: string
+    updated_at: string
+  }>>((list, p) => {
+      const effectiveQuota = store.getEffectiveProviderQuota(p)
+      if (!effectiveQuota) return list
+
+      if (effectiveQuota.mode === 'virtual') {
+        list.push({
+          ...p,
+          total_quota: effectiveQuota.total,
+          used_quota: effectiveQuota.used,
+          available_quota: effectiveQuota.available,
+          quota_mode: effectiveQuota.mode,
+        })
+        return list
       }
-    })
+
+      const scale = p.provider_type === 'mock' ? 1024 : 1
+      list.push({
+        ...p,
+        total_quota: effectiveQuota.total * scale,
+        used_quota: effectiveQuota.used * scale,
+        available_quota: effectiveQuota.available * scale,
+        quota_mode: effectiveQuota.mode,
+      })
+      return list
+    }, []).filter(p => p.total_quota > 0)
 )
 const aria2Detail = ref(t('dashboard.checking_connection'))
 const backendStatus = ref<'active' | 'error' | 'disabled'>('active')
 const backendDetail = ref(t('dashboard.backend_api_connected'))
+const systemMetrics = ref<SystemMetrics | null>(null)
+const systemMetricsError = ref('')
+let metricsTimer: ReturnType<typeof setInterval> | null = null
 
 const primaryProviderId = ref<number | null>(null)
 
@@ -61,6 +93,83 @@ function formatBytes(mb: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
+
+function formatSystemBytes(bytes: number): string {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+const hostMetricCards = computed(() => {
+  if (!systemMetrics.value) return []
+  return [
+    {
+      key: 'cpu',
+      title: t('dashboard.cpu_usage'),
+      percent: systemMetrics.value.cpu_usage,
+      ringClass: 'host-donut__fill--cpu',
+      detail: t('dashboard.cpu_usage_detail'),
+      footnote: t('dashboard.sampled_at', { time: new Date(systemMetrics.value.sampled_at).toLocaleTimeString(locale.value) }),
+    },
+    {
+      key: 'memory',
+      title: t('dashboard.memory_usage'),
+      percent: systemMetrics.value.memory_usage,
+      ringClass: 'host-donut__fill--memory',
+      detail: `${formatSystemBytes(systemMetrics.value.memory_used_bytes)} / ${formatSystemBytes(systemMetrics.value.memory_total_bytes)}`,
+      footnote: t('dashboard.memory_usage_detail'),
+    },
+    {
+      key: 'disk',
+      title: t('dashboard.disk_usage'),
+      percent: systemMetrics.value.disk_usage,
+      ringClass: 'host-donut__fill--disk',
+      detail: `${formatSystemBytes(systemMetrics.value.disk_used_bytes)} / ${formatSystemBytes(systemMetrics.value.disk_total_bytes)}`,
+      footnote: t('dashboard.disk_usage_detail', { path: systemMetrics.value.disk_path }),
+    },
+  ]
+})
+
+function ringDashArray(percent: number) {
+  const normalized = Math.max(0, Math.min(percent, 100))
+  return `${normalized} ${100 - normalized}`
+}
+
+const quickActions = computed(() => {
+  const actions = [
+    {
+      to: '/providers',
+      icon: 'registry',
+      title: t('dashboard.manage_providers'),
+      desc: t('dashboard.manage_providers_desc'),
+    },
+    {
+      to: '/openlist',
+      icon: 'files',
+      title: t('dashboard.browse_files'),
+      desc: t('dashboard.browse_files_desc'),
+    },
+    {
+      to: '/tasks',
+      icon: 'download',
+      title: t('dashboard.download_tasks'),
+      desc: t('dashboard.download_tasks_desc'),
+    },
+  ]
+
+  if (store.isAdmin) {
+    actions.splice(1, 0, {
+      to: '/quota',
+      icon: 'quota',
+      title: t('dashboard.view_quota'),
+      desc: t('dashboard.view_quota_desc'),
+    })
+  }
+
+  return actions
+})
 
 const metricCards = computed<MetricCardData[]>(() => [
   {
@@ -142,11 +251,41 @@ async function checkBackend() {
   }
 }
 
+async function fetchHostMetrics() {
+  try {
+    const res = await getSystemMetrics()
+    systemMetrics.value = res.data
+    systemMetricsError.value = ''
+  } catch (error: any) {
+    systemMetricsError.value = error?.message || t('common.request_error')
+  }
+}
+
+function startMetricsPolling() {
+  stopMetricsPolling()
+  metricsTimer = setInterval(() => {
+    void fetchHostMetrics()
+  }, 15000)
+}
+
+function stopMetricsPolling() {
+  if (metricsTimer) {
+    clearInterval(metricsTimer)
+    metricsTimer = null
+  }
+}
+
 onMounted(() => {
   store.fetchProviders()
   store.fetchAllMounts()
   checkBackend()
   checkAria2()
+  fetchHostMetrics()
+  startMetricsPolling()
+})
+
+onUnmounted(() => {
+  stopMetricsPolling()
 })
 </script>
 
@@ -247,6 +386,45 @@ onMounted(() => {
       </div>
     </transition>
 
+    <section class="panel host-panel">
+      <div class="panel__header">
+        <div>
+          <h3>{{ t('dashboard.host_metrics') }}</h3>
+          <p>
+            {{ systemMetrics?.hostname || t('dashboard.host_metrics_desc') }}
+          </p>
+        </div>
+        <button class="btn--sm" @click="fetchHostMetrics">{{ t('common.refresh') }}</button>
+      </div>
+      <div v-if="hostMetricCards.length > 0" class="host-metrics-grid">
+        <article v-for="item in hostMetricCards" :key="item.key" class="host-card">
+          <div class="host-card__ring">
+            <svg viewBox="0 0 36 36" class="host-donut">
+              <path
+                class="host-donut__bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 0 0 31.831 a 15.9155 15.9155 0 0 0 0 -31.831"
+              />
+              <path
+                class="host-donut__fill"
+                :class="item.ringClass"
+                :stroke-dasharray="ringDashArray(item.percent)"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 0 0 31.831 a 15.9155 15.9155 0 0 0 0 -31.831"
+              />
+              <text x="18" y="17.5" class="host-donut__text">{{ item.percent.toFixed(1) }}%</text>
+            </svg>
+          </div>
+          <div class="host-card__body">
+            <p class="host-card__title">{{ item.title }}</p>
+            <p class="host-card__detail">{{ item.detail }}</p>
+            <p class="host-card__footnote">{{ item.footnote }}</p>
+          </div>
+        </article>
+      </div>
+      <p v-else class="host-panel__empty">
+        {{ systemMetricsError || t('dashboard.host_metrics_empty') }}
+      </p>
+    </section>
+
     <div class="dashboard-panels">
       <section class="panel">
         <div class="panel__header">
@@ -290,25 +468,12 @@ onMounted(() => {
           <p>{{ t('dashboard.quick_actions_desc') }}</p>
         </div>
         <div class="action-grid">
-          <router-link to="/providers" class="action-card">
-            <div class="action-card__icon">📦</div>
-            <h4>{{ t('dashboard.manage_providers') }}</h4>
-            <p>{{ t('dashboard.manage_providers_desc') }}</p>
-          </router-link>
-          <router-link to="/quota" class="action-card">
-            <div class="action-card__icon">💾</div>
-            <h4>{{ t('dashboard.view_quota') }}</h4>
-            <p>{{ t('dashboard.view_quota_desc') }}</p>
-          </router-link>
-          <router-link to="/openlist" class="action-card">
-            <div class="action-card__icon">📁</div>
-            <h4>{{ t('dashboard.browse_files') }}</h4>
-            <p>{{ t('dashboard.browse_files_desc') }}</p>
-          </router-link>
-          <router-link to="/tasks" class="action-card">
-            <div class="action-card__icon">⬇️</div>
-            <h4>{{ t('dashboard.download_tasks') }}</h4>
-            <p>{{ t('dashboard.download_tasks_desc') }}</p>
+          <router-link v-for="action in quickActions" :key="action.to" :to="action.to" class="action-card">
+            <div class="action-card__icon" :class="`action-card__icon--${action.icon}`">
+              <span>{{ action.title.slice(0, 1) }}</span>
+            </div>
+            <h4>{{ action.title }}</h4>
+            <p>{{ action.desc }}</p>
           </router-link>
         </div>
       </section>
@@ -323,6 +488,94 @@ onMounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 20px;
   margin-top: 20px;
+}
+
+.host-panel {
+  margin-top: 20px;
+}
+
+.host-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.host-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.host-card__ring {
+  width: 82px;
+  height: 82px;
+  flex-shrink: 0;
+}
+
+.host-donut {
+  width: 100%;
+  height: 100%;
+}
+
+.host-donut__bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 4;
+}
+
+.host-donut__fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.host-donut__fill--cpu {
+  stroke: #3b82f6;
+}
+
+.host-donut__fill--memory {
+  stroke: #10b981;
+}
+
+.host-donut__fill--disk {
+  stroke: #f59e0b;
+}
+
+.host-donut__text {
+  color: var(--text);
+  fill: var(--text);
+  font-size: 6.3px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.host-card__body {
+  min-width: 0;
+}
+
+.host-card__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.host-card__detail,
+.host-card__footnote,
+.host-panel__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.host-card__footnote {
+  margin-top: 6px;
 }
 
 .action-grid {
@@ -352,8 +605,28 @@ onMounted(() => {
 }
 
 .action-card__icon {
-  font-size: 32px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 800;
+  color: white;
   margin-bottom: 12px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.action-card__icon--quota {
+  background: linear-gradient(135deg, #10b981, #047857);
+}
+
+.action-card__icon--files {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.action-card__icon--download {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
 }
 
 .action-card h4 {
@@ -603,6 +876,10 @@ onMounted(() => {
   }
 
   .action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-metrics-grid {
     grid-template-columns: 1fr;
   }
 }

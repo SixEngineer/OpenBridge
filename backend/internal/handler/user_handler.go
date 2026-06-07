@@ -52,8 +52,8 @@ func (h *UserHandler) UserLogin(c *gin.Context) {
 
 // 重置用户数据
 func (h *UserHandler) Reset(c *gin.Context) {
-
-	err := h.userUseCase.Reset()
+	scope := usecase.ResetScope(c.DefaultQuery("scope", string(usecase.ResetScopeAll)))
+	err := h.userUseCase.Reset(scope)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeResetFailed, Message: err.Error()})
 		return
@@ -72,4 +72,13 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: userInfo})
+}
+
+func (h *UserHandler) GetSessionStatus(c *gin.Context) {
+	status := h.userUseCase.GetSessionStatus()
+	c.JSON(http.StatusOK, tool.HttpResult{
+		Code:    myerror.ErrorCodeOK,
+		Message: myerror.SuccessMessage,
+		Data:    status,
+	})
 }

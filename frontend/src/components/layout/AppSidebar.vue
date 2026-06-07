@@ -15,11 +15,17 @@ const allItems: NavItem[] = [
   { label: 'Providers', path: '/providers', description: 'Adapter registry', i18nKey: 'providers', i18nDescKey: 'providers_desc' },
   { label: 'Tasks', path: '/tasks', description: 'Download control center', i18nKey: 'tasks', i18nDescKey: 'tasks_desc' },
   { label: 'Quota', path: '/quota', description: 'Capacity monitoring', i18nKey: 'quota', i18nDescKey: 'quota_desc' },
+  { label: 'Rclone', path: '/rclone', description: 'Mount profiles', i18nKey: 'rclone', i18nDescKey: 'rclone_desc' },
   { label: 'Settings', path: '/settings', description: 'Policy and configuration', i18nKey: 'settings', i18nDescKey: 'settings_desc' },
   { label: 'Debug', path: '/debug', description: 'Trace and diagnostics', i18nKey: 'debug', i18nDescKey: 'debug_desc' },
 ]
 
-const items = computed(() => allItems)
+const userVisiblePaths = new Set(['/dashboard', '/openlist', '/providers', '/tasks'])
+
+const items = computed(() => {
+  if (store.isAdmin) return allItems
+  return allItems.filter(item => userVisiblePaths.has(item.path))
+})
 
 const activePath = computed(() => route.path)
 

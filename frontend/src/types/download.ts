@@ -12,6 +12,7 @@ export interface DirectLinkResult {
   size: number
   provider: string
   direct_link: string
+  header?: string
   is_openlist_proxy: boolean
 }
 

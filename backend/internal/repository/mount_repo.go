@@ -50,6 +50,18 @@ func (repo *MountRepository) ListAllMountPoints() ([]entity.MountPoint, error) {
 	return mounts, nil
 }
 
+func (repo *MountRepository) ListMountPointsByProviderAccountIDs(providerAccountIDs []uint) ([]entity.MountPoint, error) {
+	if len(providerAccountIDs) == 0 {
+		return []entity.MountPoint{}, nil
+	}
+
+	var mounts []entity.MountPoint
+	if err := repo.db.Where("provider_account_id IN ?", providerAccountIDs).Find(&mounts).Error; err != nil {
+		return nil, err
+	}
+	return mounts, nil
+}
+
 func (repo *MountRepository) UpdateMountPoint(mount *entity.MountPoint) error {
 	return repo.db.Save(mount).Error
 }

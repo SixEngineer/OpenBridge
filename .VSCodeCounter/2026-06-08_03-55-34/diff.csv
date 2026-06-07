@@ -1,0 +1,6 @@
+"filename", "language", "Go", "TypeScript", "JSON", "comment", "blank", "total"
+"f:\OpenBridge\Monorepo\backend\internal\tool\path_picker.go", "Go", 3, 0, 0, 0, 0, 3
+"f:\OpenBridge\Monorepo\frontend\src\api\system.ts", "TypeScript", 0, 15, 0, 0, 4, 19
+"f:\OpenBridge\Monorepo\frontend\src\i18n\locales\en.json", "JSON", 0, 0, 2, 0, 0, 2
+"f:\OpenBridge\Monorepo\frontend\src\i18n\locales\zh-CN.json", "JSON", 0, 0, 2, 0, 0, 2
+"Total", "-", 3, 15, 4, 0, 4, 26

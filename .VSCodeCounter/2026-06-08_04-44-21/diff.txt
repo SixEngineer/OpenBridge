@@ -1,0 +1,45 @@
+Date : 2026-06-08 04:44:21
+Directory : f:\OpenBridge\Monorepo
+Total : 8 files,  257 codes, 0 comments, 32 blanks, all 289 lines
+
+Languages
++------------+------------+------------+------------+------------+------------+
+| language   | files      | code       | comment    | blank      | total      |
++------------+------------+------------+------------+------------+------------+
+| Go         |          3 |        204 |          0 |         30 |        234 |
+| JSON       |          2 |         44 |          0 |          0 |         44 |
+| TypeScript |          3 |          9 |          0 |          2 |         11 |
++------------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                   |          8 |        257 |          0 |         32 |        289 |
+| backend                                                             |          3 |        204 |          0 |         30 |        234 |
+| backend (Files)                                                     |          1 |          1 |          0 |          0 |          1 |
+| backend\internal                                                    |          2 |        203 |          0 |         30 |        233 |
+| backend\internal\handler                                            |          1 |         22 |          0 |          3 |         25 |
+| backend\internal\usecase                                            |          1 |        181 |          0 |         27 |        208 |
+| frontend                                                            |          5 |         53 |          0 |          2 |         55 |
+| frontend\src                                                        |          5 |         53 |          0 |          2 |         55 |
+| frontend\src\api                                                    |          2 |          8 |          0 |          2 |         10 |
+| frontend\src\i18n                                                   |          2 |         44 |          0 |          0 |         44 |
+| frontend\src\i18n\locales                                           |          2 |         44 |          0 |          0 |         44 |
+| frontend\src\types                                                  |          1 |          1 |          0 |          0 |          1 |
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| filename                                                            | language   | code       | comment    | blank      | total      |
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| f:\OpenBridge\Monorepo\backend\internal\handler\download_handler.go | Go         |         22 |          0 |          3 |         25 |
+| f:\OpenBridge\Monorepo\backend\internal\usecase\storage_usecase.go  | Go         |        181 |          0 |         27 |        208 |
+| f:\OpenBridge\Monorepo\backend\main.go                              | Go         |          1 |          0 |          0 |          1 |
+| f:\OpenBridge\Monorepo\frontend\src\api\endpoints.ts                | TypeScript |          1 |          0 |          0 |          1 |
+| f:\OpenBridge\Monorepo\frontend\src\api\task.ts                     | TypeScript |          7 |          0 |          2 |          9 |
+| f:\OpenBridge\Monorepo\frontend\src\i18n\locales\en.json            | JSON       |         22 |          0 |          0 |         22 |
+| f:\OpenBridge\Monorepo\frontend\src\i18n\locales\zh-CN.json         | JSON       |         22 |          0 |          0 |         22 |
+| f:\OpenBridge\Monorepo\frontend\src\types\download.ts               | TypeScript |          1 |          0 |          0 |          1 |
+| Total                                                               |            |        257 |          0 |         32 |        289 |
++---------------------------------------------------------------------+------------+------------+------------+------------+------------+

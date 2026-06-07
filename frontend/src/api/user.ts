@@ -15,6 +15,17 @@ export interface UserInfo {
   otp: boolean
 }
 
+export interface SessionStatus {
+  authenticated: boolean
+  backend_instance_id: string
+  openlist_base_url: string
+  fingerprint: string
+  username?: string
+  role?: number
+  checked_at: number
+  reason?: string
+}
+
 // 用户登录（后端：POST /user/login, body: {username, password}）
 export function userLogin(data: {
   username: string
@@ -23,12 +34,20 @@ export function userLogin(data: {
   return request.post(endpoints.userLogin, data)
 }
 
-// 清空所有用户数据（后端：DELETE /user/reset）
-export function userReset(): Promise<ApiResponse<null>> {
-  return request.delete(endpoints.userReset)
+export type UserResetScope = 'current' | 'all'
+
+// 重置用户数据（后端：DELETE /user/reset?scope=current|all）
+export function userReset(scope: UserResetScope = 'all'): Promise<ApiResponse<null>> {
+  return request.delete(endpoints.userReset, {
+    params: { scope },
+  })
 }
 
 // 获取当前用户信息（后端：GET /user/info → 转发 OpenList /api/me）
 export function getUserInfo(): Promise<ApiResponse<UserInfo>> {
   return request.get(endpoints.userInfo)
+}
+
+export function getSessionStatus(): Promise<ApiResponse<SessionStatus>> {
+  return request.get(endpoints.userSessionStatus)
 }

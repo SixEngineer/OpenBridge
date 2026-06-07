@@ -1,0 +1,10 @@
+"filename", "language", "Go", "JSON", "TypeScript", "comment", "blank", "total"
+"f:\OpenBridge\Monorepo\backend\internal\handler\download_handler.go", "Go", 22, 0, 0, 0, 3, 25
+"f:\OpenBridge\Monorepo\backend\internal\usecase\storage_usecase.go", "Go", 181, 0, 0, 0, 27, 208
+"f:\OpenBridge\Monorepo\backend\main.go", "Go", 1, 0, 0, 0, 0, 1
+"f:\OpenBridge\Monorepo\frontend\src\api\endpoints.ts", "TypeScript", 0, 0, 1, 0, 0, 1
+"f:\OpenBridge\Monorepo\frontend\src\api\task.ts", "TypeScript", 0, 0, 7, 0, 2, 9
+"f:\OpenBridge\Monorepo\frontend\src\i18n\locales\en.json", "JSON", 0, 22, 0, 0, 0, 22
+"f:\OpenBridge\Monorepo\frontend\src\i18n\locales\zh-CN.json", "JSON", 0, 22, 0, 0, 0, 22
+"f:\OpenBridge\Monorepo\frontend\src\types\download.ts", "TypeScript", 0, 0, 1, 0, 0, 1
+"Total", "-", 204, 44, 9, 0, 32, 289

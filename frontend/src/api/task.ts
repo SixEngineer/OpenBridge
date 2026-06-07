@@ -16,6 +16,14 @@ export function resolveDirectLink(path: string): Promise<ApiResponse<DirectLinkR
   return request.post(endpoints.downloadResolve, { path })
 }
 
+export function buildFolderZipUrl(path: string): string {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+  const base = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+  const url = new URL(`${apiBase}${endpoints.downloadFolderZip}`, base)
+  url.searchParams.set('path', path)
+  return url.toString()
+}
+
 // 获取单个任务详情（后端：GET /download/tasks/:id）
 export function getTaskDetail(taskId: string): Promise<ApiResponse<DownloadTask>> {
   return request.get(endpoints.downloadTaskDetail(taskId))

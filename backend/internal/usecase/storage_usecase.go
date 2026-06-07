@@ -1,13 +1,17 @@
 package usecase
 
 import (
+	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"openbridge/backend/internal/config"
+	"path"
 	"strings"
 	"time"
 )
@@ -132,7 +136,14 @@ type DirectLinkResult struct {
 	Size            int64  `json:"size"`
 	Provider        string `json:"provider"`
 	DirectLink      string `json:"direct_link"`
+	Header          string `json:"header,omitempty"`
 	IsOpenListProxy bool   `json:"is_openlist_proxy"`
+}
+
+type zipFileSource struct {
+	Name       string
+	DirectLink string
+	Header     string
 }
 
 func NewStorageUseCase(config *config.Config) *StorageUseCase {
@@ -342,6 +353,228 @@ func (s *StorageUseCase) ResolveDirectLink(path string) (*DirectLinkResult, erro
 		Size:            detail.Size,
 		Provider:        detail.Provider,
 		DirectLink:      detail.RawURL,
+		Header:          detail.Header,
 		IsOpenListProxy: isProxy,
 	}, nil
+}
+
+func (s *StorageUseCase) ResolveDirectLinkForClient(path string, publicBaseURL string) (*DirectLinkResult, error) {
+	result, err := s.ResolveDirectLink(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.IsOpenListProxy {
+		base := strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")
+		if base != "" {
+			result.DirectLink = base + pathJoinURL("/api/v1/download/direct") + "?path=" + url.QueryEscape(path)
+		}
+	}
+
+	return result, nil
+}
+
+func pathJoinURL(parts ...string) string {
+	joined := path.Join(parts...)
+	if !strings.HasPrefix(joined, "/") {
+		joined = "/" + joined
+	}
+	return joined
+}
+
+func (s *StorageUseCase) StreamFolderZip(ctx context.Context, folderPath string, writer io.Writer) (string, error) {
+	detail, err := s.GetFileInfo(folderPath)
+	if err != nil {
+		return "", err
+	}
+	if !detail.IsDir {
+		return "", fmt.Errorf("path is not a folder: %s", folderPath)
+	}
+
+	rootName := sanitizeZipName(detail.Name)
+	if rootName == "" {
+		rootName = sanitizeZipName(path.Base(strings.TrimRight(folderPath, "/")))
+	}
+	if rootName == "" || rootName == "." || rootName == "/" {
+		rootName = "folder"
+	}
+
+	sources, err := s.collectFolderZipSources(folderPath, "")
+	if err != nil {
+		return "", err
+	}
+	if len(sources) == 0 {
+		return "", errors.New("folder empty")
+	}
+
+	zipWriter := zip.NewWriter(writer)
+	for _, source := range sources {
+		header := &zip.FileHeader{
+			Name:   path.Join(rootName, source.Name),
+			Method: zip.Deflate,
+		}
+		header.SetMode(0644)
+
+		entryWriter, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return "", err
+		}
+		if err := s.streamRemoteFile(ctx, source.DirectLink, source.Header, entryWriter); err != nil {
+			return "", err
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		return "", err
+	}
+
+	return rootName + ".zip", nil
+}
+
+func (s *StorageUseCase) collectFolderZipSources(folderPath string, relativeDir string) ([]zipFileSource, error) {
+	const perPage = 200
+
+	var (
+		page      uint = 1
+		fetched   int
+		collected []zipFileSource
+	)
+
+	for {
+		data, err := s.GetFiles(folderPath, page, perPage)
+		if err != nil {
+			return nil, err
+		}
+		fetched += len(data.Content)
+
+		for _, item := range data.Content {
+			childPath := joinStoragePath(folderPath, item.Name)
+			if item.IsDir || item.Type == 1 {
+				nestedDir := path.Join(relativeDir, item.Name)
+				nestedSources, err := s.collectFolderZipSources(childPath, nestedDir)
+				if err != nil {
+					return nil, err
+				}
+				collected = append(collected, nestedSources...)
+				continue
+			}
+
+			link, err := s.ResolveDirectLink(childPath)
+			if err != nil {
+				return nil, err
+			}
+			collected = append(collected, zipFileSource{
+				Name:       path.Join(relativeDir, item.Name),
+				DirectLink: link.DirectLink,
+				Header:     link.Header,
+			})
+		}
+
+		if len(data.Content) == 0 || fetched >= data.Total || len(data.Content) < perPage {
+			break
+		}
+		page++
+	}
+
+	return collected, nil
+}
+
+func (s *StorageUseCase) streamRemoteFile(ctx context.Context, link string, headerSpec string, writer io.Writer) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
+	if err != nil {
+		return err
+	}
+
+	for key, values := range parseHeaderSpec(headerSpec) {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+
+	client := &http.Client{Timeout: 0}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("fetch remote file failed: status=%d", resp.StatusCode)
+	}
+
+	_, err = io.Copy(writer, resp.Body)
+	return err
+}
+
+func parseHeaderSpec(raw string) http.Header {
+	header := make(http.Header)
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return header
+	}
+
+	var stringMap map[string]string
+	if err := json.Unmarshal([]byte(trimmed), &stringMap); err == nil {
+		for key, value := range stringMap {
+			if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+				header.Add(key, value)
+			}
+		}
+		return header
+	}
+
+	var anyMap map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &anyMap); err == nil {
+		for key, value := range anyMap {
+			if strings.TrimSpace(key) == "" || value == nil {
+				continue
+			}
+			switch typed := value.(type) {
+			case string:
+				if strings.TrimSpace(typed) != "" {
+					header.Add(key, typed)
+				}
+			case []interface{}:
+				for _, item := range typed {
+					if text := strings.TrimSpace(fmt.Sprint(item)); text != "" {
+						header.Add(key, text)
+					}
+				}
+			default:
+				if text := strings.TrimSpace(fmt.Sprint(typed)); text != "" {
+					header.Add(key, text)
+				}
+			}
+		}
+		return header
+	}
+
+	for _, line := range strings.Split(trimmed, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key != "" && value != "" {
+			header.Add(key, value)
+		}
+	}
+
+	return header
+}
+
+func joinStoragePath(parent string, name string) string {
+	if parent == "" || parent == "/" {
+		return "/" + strings.TrimLeft(name, "/")
+	}
+	return path.Clean(parent + "/" + strings.TrimLeft(name, "/"))
+}
+
+func sanitizeZipName(name string) string {
+	safe := strings.ReplaceAll(strings.TrimSpace(name), "\\", "/")
+	safe = path.Clean("/" + safe)
+	safe = strings.TrimPrefix(safe, "/")
+	safe = strings.Trim(safe, "/")
+	return safe
 }
