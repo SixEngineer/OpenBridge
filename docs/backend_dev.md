@@ -87,4 +87,14 @@ POST /api/v1/mount/:id/quota/sync
 
 TODO：完善 Refresh Token 机制，支持自动刷新 Access Token。
 
-目前已经尝试由我们自己的 `refresh_token` 生成新的 `access_token`，但发现 Baidu 提供的 API 需要在百度开放平台配置一个应用，并申请上线审核，暂时无法实现。 
+目前已经尝试由我们自己的 `refresh_token` 生成新的 `access_token`，但发现 Baidu 提供的 API 需要在百度开放平台配置一个应用，并申请上线审核，暂时无法实现。
+
+#### 2026.06.07
+
+- 修复 OpenFileLocation Windows 下路径含空格或相对路径时 explorer /select, 定位错误的问题
+  - getActualFilePath 增加 filepath.Abs + strings.TrimSpace 确保返回绝对路径
+  - OpenFile（cmd /c start）不受影响，因为 start 使用 ShellExecute Win32 API，可直接处理相对路径和含空格路径
+
+- RetryTask: 修复重复 AddURI 的 bug，改为 if/else 分支
+- GetTask: 同步 aria2 状态时处理 GID not found 情况，标记为 error
+- 新增 DownloadUseCase.getActualFilePath 降级逻辑（DownloadDir + FileName 拼接） 

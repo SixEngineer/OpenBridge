@@ -33,10 +33,8 @@ function handleLogout() {
 async function checkOpenList() {
   try {
     const res = await getDrivers()
-    // 有驱动列表数据才算真正连接（OpenList 启动了但未登录时列表为空）
-    openListStatus.value = (res.code === 1000 || res.code === 0) && Array.isArray(res.data) && res.data.length > 0
-      ? 'connected'
-      : 'disconnected'
+    // 未登录时不显示"已连接"（OpenList 跑了但没登录 OpenBridge 没意义）
+    openListStatus.value = store.isLoggedIn && (res.code === 1000 || res.code === 0) ? 'connected' : 'disconnected'
   } catch (e) {
     openListStatus.value = 'disconnected'
   }

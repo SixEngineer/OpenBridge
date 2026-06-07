@@ -96,18 +96,45 @@ function getMountCache(mountId: number): MountQuotaCache {
 
 // ── Edit mount ──
 const editingMountId = ref<number | null>(null)
-const editForm = reactive<{ name: string; virtual_total: number; virtual_used: number }>({
+const editForm = reactive<{
+  name: string
+  quota_mode: string
+  virtual_total: number
+  virtual_used: number
+  inherit_from_id: number | null
+}>({
   name: '',
+  quota_mode: 'real',
   virtual_total: 0,
   virtual_used: 0,
+  inherit_from_id: null,
+})
+
+// 编辑时可选的继承父挂载点（排除自己和子挂载点链）
+const editAvailableParents = computed(() => {
+  return store.mounts.filter(m =>
+    m.mode === 'real' && m.id !== editingMountId.value
+  )
 })
 
 function startEdit(mount: MountPoint) {
   editingMountId.value = mount.id
   editForm.name = mount.name
+  editForm.quota_mode = mount.quota_mode
   editForm.virtual_total = mount.virtual_total
   editForm.virtual_used = mount.virtual_used
+  editForm.inherit_from_id = mount.inherit_from_id ?? null
 }
+
+// 编辑中切换模式到 virtual 时，自动填入 real 的当前配额值
+watch(() => editForm.quota_mode, (newMode) => {
+  if (newMode !== 'virtual' || editingMountId.value === null) return
+  const cache = getMountCache(editingMountId.value)
+  if (cache.quota) {
+    editForm.virtual_total = cache.quota.total
+    editForm.virtual_used = cache.quota.used
+  }
+})
 
 function cancelEdit() {
   editingMountId.value = null
@@ -117,12 +144,23 @@ async function handleEditSave(mountId: number) {
   const mount = store.allMounts.find(m => m.id === mountId)
   if (!mount) return
   const payload: Partial<MountPoint> = { name: editForm.name }
-  if (mount.quota_mode === 'virtual') {
+  // 判断模式是否改变
+  const modeChanged = editForm.quota_mode !== mount.quota_mode
+  if (modeChanged) {
+    payload.quota_mode = editForm.quota_mode
+  }
+  if (editForm.quota_mode === 'virtual') {
     payload.virtual_total = editForm.virtual_total
     payload.virtual_used = editForm.virtual_used
+  } else if (editForm.quota_mode === 'inherit') {
+    payload.inherit_from_id = editForm.inherit_from_id
   }
   const result = await store.updateMountById(mountId, payload)
   if (result) {
+    // 模式切换后重新查询配额
+    if (modeChanged) {
+      await handleSyncMount(mountId)
+    }
     showStatus(t('quota.edit_success'))
     editingMountId.value = null
   } else {
@@ -500,14 +538,59 @@ watch(selectedProviderId, async () => {
             <label>{{ t('quota.edit_name') }}</label>
             <input v-model="editForm.name" type="text" class="edit-input" />
           </div>
-          <div v-if="mount.quota_mode === 'virtual'" class="edit-field">
+
+          <!-- Mode selector -->
+          <div class="edit-field">
+            <label>{{ t('quota.mode_title') }}</label>
+            <div class="mode-options">
+              <label class="mode-option">
+                <input type="radio" v-model="editForm.quota_mode" value="real" />
+                <div class="mode-option__body">
+                  <span class="mode-option__title">{{ t('quota.real') }}</span>
+                  <span class="mode-option__desc">{{ t('quota.real_desc') }}</span>
+                </div>
+              </label>
+              <label class="mode-option">
+                <input type="radio" v-model="editForm.quota_mode" value="virtual" />
+                <div class="mode-option__body">
+                  <span class="mode-option__title">{{ t('quota.virtual') }}</span>
+                  <span class="mode-option__desc">{{ t('quota.virtual_desc') }}</span>
+                </div>
+              </label>
+              <label class="mode-option">
+                <input type="radio" v-model="editForm.quota_mode" value="inherit" />
+                <div class="mode-option__body">
+                  <span class="mode-option__title">{{ t('quota.inherit') }}</span>
+                  <span class="mode-option__desc">{{ t('quota.inherit_desc') }}</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Inherit parent selector -->
+          <div v-if="editForm.quota_mode === 'inherit'" class="edit-field">
+            <label>{{ t('quota.inherit_parent') }}</label>
+            <div v-if="editAvailableParents.length === 0" class="mode-hint">
+              {{ t('quota.inherit_no_parents') }}
+            </div>
+            <select v-else v-model.number="editForm.inherit_from_id" class="edit-input">
+              <option :value="null" disabled>{{ t('quota.inherit_select_hint') }}</option>
+              <option v-for="mp in editAvailableParents" :key="mp.id" :value="mp.id">
+                {{ mp.providerName }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Virtual fields -->
+          <div v-if="editForm.quota_mode === 'virtual'" class="edit-field">
             <label>{{ t('quota.edit_virtual_total') }}</label>
             <input v-model.number="editForm.virtual_total" type="number" min="1" class="edit-input" />
           </div>
-          <div v-if="mount.quota_mode === 'virtual'" class="edit-field">
+          <div v-if="editForm.quota_mode === 'virtual'" class="edit-field">
             <label>{{ t('quota.edit_virtual_used') }}</label>
             <input v-model.number="editForm.virtual_used" type="number" min="0" class="edit-input" />
           </div>
+
           <div class="edit-actions">
             <button class="btn btn--primary" @click="handleEditSave(mount.id)">{{ t('quota.edit_save') }}</button>
             <button class="btn btn--secondary" @click="cancelEdit()">{{ t('quota.edit_cancel') }}</button>

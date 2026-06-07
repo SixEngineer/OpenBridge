@@ -302,7 +302,9 @@
     "retry_success": "已重新提交下载任务",
     "retry_failed": "重试失败",
     "open_file": "打开文件",
-    "open_file_location": "在文件夹中显示"
+    "open_file_location": "在文件夹中显示",
+    "open_file_failed": "打开文件失败",
+    "open_file_location_failed": "打开文件位置失败"
   },
   "download_dialog": {
     "title": "下载确认",

@@ -299,9 +299,11 @@ async function handleOpenFile(taskId: string) {
     const res = await openFile(taskId)
     if (res.code !== 1000) {
       console.error('open file failed:', res.msg)
+      alert(res.msg || t('tasks.open_file_failed'))
     }
   } catch (e: any) {
     console.error('open file error:', e?.message)
+    alert(e?.message || t('common.request_error'))
   } finally {
     openingId.value = null
   }
@@ -313,9 +315,11 @@ async function handleOpenFileLocation(taskId: string) {
     const res = await openFileLocation(taskId)
     if (res.code !== 1000) {
       console.error('open file location failed:', res.msg)
+      alert(res.msg || t('tasks.open_file_location_failed'))
     }
   } catch (e: any) {
     console.error('open file location error:', e?.message)
+    alert(e?.message || t('common.request_error'))
   } finally {
     openingId.value = null
   }

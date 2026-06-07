@@ -11,4 +11,8 @@ feat: 多挂载点配额管理、管理员权限系统、下载重试与打开�
 - 自定义 CSS tooltip、表格对齐、v-for 遮蔽 t() 修复、tooltip overflow 裁剪修复
 - 前端 fetchAllTasks 清理失效任务 ID，避免 record not found 400 错误
 - 英文 logout 文案 Logout → Re-login
-- 更新 docs/frontend_dev.md 开发日志
+- 更新 docs/frontend_dev.md、docs/backend_dev.md 开发日志
+- 修复 OpenFileLocation：getActualFilePath 增加 filepath.Abs 确保绝对路径
+- OpenFile/OpenFileLocation 失败时弹出 alert 提示（之前只 console.error 用户无感知）
+- 修复 OpenList 连接状态判断：未登录 OpenBridge 时不显示"已连接"
+- 新增 i18n 键 open_file_failed / open_file_location_failed

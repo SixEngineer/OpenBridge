@@ -302,7 +302,9 @@
     "retry_success": "Task resubmitted",
     "retry_failed": "Retry failed",
     "open_file": "Open file",
-    "open_file_location": "Show in folder"
+    "open_file_location": "Show in folder",
+    "open_file_failed": "Failed to open file",
+    "open_file_location_failed": "Failed to open file location"
   },
   "download_dialog": {
     "title": "Download Confirmation",

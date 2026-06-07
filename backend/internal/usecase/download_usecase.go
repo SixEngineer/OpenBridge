@@ -156,8 +156,16 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 	if err == nil {
 		if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
 			if f, ok := files[0].(map[string]interface{}); ok {
-				if path, ok := f["path"].(string); ok && path != "" {
-					return filepath.FromSlash(path), nil
+				if path, ok := f["path"].(string); ok {
+					path = strings.TrimSpace(path)
+					if path != "" {
+						normalized := filepath.FromSlash(path)
+						// 确保返回绝对路径 —— explorer /select, 不支持相对路径
+						if absPath, absErr := filepath.Abs(normalized); absErr == nil {
+							return absPath, nil
+						}
+						return normalized, nil
+					}
 				}
 			}
 		}
@@ -219,6 +227,8 @@ func (u *DownloadUseCase) OpenFileLocation(taskID string) (string, error) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
+		// 直接用 explorer /select, 打开所在文件夹并选中文件。
+		// getActualFilePath 已通过 filepath.FromSlash + filepath.Abs 确保返回绝对路径。
 		cmd = exec.Command("explorer", "/select,"+filePath)
 	case "darwin":
 		cmd = exec.Command("open", "-R", filePath)

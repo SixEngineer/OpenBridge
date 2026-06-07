@@ -84,7 +84,7 @@ func (u *MountUseCase) ListAllMounts(ctx context.Context) ([]entity.MountPoint, 
 	return u.mountRepo.ListAllMountPoints()
 }
 
-// UpdateMount 更新挂载点
+// UpdateMount 更新挂载点（支持修改名称、配额模式及模式关联字段）
 func (u *MountUseCase) UpdateMount(ctx context.Context, mount entity.MountPoint) (*entity.MountPoint, error) {
 	existing, err := u.mountRepo.GetMountPoint(mount.ID)
 	if err != nil {
@@ -94,14 +94,47 @@ func (u *MountUseCase) UpdateMount(ctx context.Context, mount entity.MountPoint)
 	if mount.Name != "" {
 		existing.Name = mount.Name
 	}
-	// 虚拟模式可更新总量和已用量
-	if strings.ToLower(existing.QuotaMode) == string(entity.QuotaModeVirtual) {
+
+	// 检查是否要修改配额模式
+	newMode := strings.TrimSpace(mount.QuotaMode)
+	if newMode != "" && strings.ToLower(newMode) != strings.ToLower(existing.QuotaMode) {
+		// 切换到新模式，用 validateMountConfig 校验并清理不相关字段
+		mode := entity.QuotaMode(strings.ToLower(newMode))
+		if err := mode.Valid(); err != nil {
+			return nil, err
+		}
+		// 构造一个临时 MountPoint 用于校验
+		tmp := *existing
+		tmp.QuotaMode = string(mode)
+		tmp.InheritFromID = mount.InheritFromID
+		tmp.VirtualTotal = mount.VirtualTotal
+		tmp.VirtualUsed = mount.VirtualUsed
+		if err := u.validateMountConfig(ctx, &tmp, mode); err != nil {
+			return nil, err
+		}
+		// 应用新模式及清理后的字段
+		existing.QuotaMode = string(mode)
+		existing.InheritFromID = tmp.InheritFromID
+		existing.VirtualTotal = tmp.VirtualTotal
+		existing.VirtualUsed = tmp.VirtualUsed
+	} else if strings.ToLower(existing.QuotaMode) == string(entity.QuotaModeVirtual) {
+		// 同模式虚拟更新
 		if mount.VirtualTotal > 0 {
 			existing.VirtualTotal = mount.VirtualTotal
 		}
 		existing.VirtualUsed = mount.VirtualUsed
 		if existing.VirtualUsed > existing.VirtualTotal {
 			return nil, ErrMountVirtualUsedInvalid
+		}
+	} else if strings.ToLower(existing.QuotaMode) == string(entity.QuotaModeInherit) {
+		// 同模式继承可更新父挂载点
+		if mount.InheritFromID != nil {
+			tmp := *existing
+			tmp.InheritFromID = mount.InheritFromID
+			if err := u.validateMountConfig(ctx, &tmp, entity.QuotaModeInherit); err != nil {
+				return nil, err
+			}
+			existing.InheritFromID = mount.InheritFromID
 		}
 	}
 

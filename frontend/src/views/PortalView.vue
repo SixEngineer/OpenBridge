@@ -2,9 +2,11 @@
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
 
 const router = useRouter()
+const store = useConsoleStore()
 const { t } = useI18n()
 const isConnected = ref(false)
 const isLaunching = ref(false)
@@ -12,8 +14,8 @@ const isLaunching = ref(false)
 onMounted(async () => {
   try {
     const res = await getDrivers()
-    // 有驱动列表数据才算真正连接（OpenList 启动了但未登录时列表为空）
-    isConnected.value = (res.code === 1000 || res.code === 0) && Array.isArray(res.data) && res.data.length > 0
+    // 未登录时不显示"已连接"
+    isConnected.value = store.isLoggedIn && (res.code === 1000 || res.code === 0)
   } catch {
     isConnected.value = false
   }
