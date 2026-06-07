@@ -99,7 +99,7 @@ async function handleReset() {
               <span class="provider-row__name">{{ p.name }}</span>
               <code class="provider-row__id">ID: {{ p.id }}</code>
             </div>
-            <span class="tag">{{ p.provider_type }}</span>
+            <span class="provider-type-tag" :class="`provider-type-tag--${p.provider_type}`">{{ p.provider_type }}</span>
           </div>
         </div>
         <p v-else class="empty-hint">{{ t('debug.no_providers') }}</p>
@@ -181,6 +181,17 @@ async function handleReset() {
 .btn--sm {
   padding: 6px 14px;
   font-size: 13px;
+  background: var(--surface-strong);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn--sm:hover {
+  background: var(--surface);
+  border-color: var(--muted);
 }
 
 .btn:disabled {
@@ -272,13 +283,48 @@ async function handleReset() {
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 
-.tag {
-  padding: 3px 10px;
-  background: #dbeafe;
-  color: #1e40af;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
+/* Provider type color tags (matching Dashboard) */
+.provider-type-tag {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
+}
+.provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+.provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.12);
+  color: #f97316;
+}
+.provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+[data-theme="dark"] .provider-type-tag--mock {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+[data-theme="dark"] .provider-type-tag--baidu {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+[data-theme="dark"] .provider-type-tag--quark {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+[data-theme="dark"] .provider-type-tag--local {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
 }
 
 .empty-hint {

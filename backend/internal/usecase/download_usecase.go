@@ -154,17 +154,27 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 	// 优先从 aria2 tellStatus 获取真实文件路径
 	status, err := u.aria2Client.TellStatus(task.Aria2GID)
 	if err == nil {
+		// aria2 tellStatus 返回的下载目录（用于相对路径拼接）
+		ariaDir, _ := status["dir"].(string)
+
 		if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
 			if f, ok := files[0].(map[string]interface{}); ok {
 				if path, ok := f["path"].(string); ok {
 					path = strings.TrimSpace(path)
 					if path != "" {
 						normalized := filepath.FromSlash(path)
-						// 确保返回绝对路径 —— explorer /select, 不支持相对路径
-						if absPath, absErr := filepath.Abs(normalized); absErr == nil {
-							return absPath, nil
+						// 绝对路径直接用
+						if filepath.IsAbs(normalized) {
+							return normalized, nil
 						}
-						return normalized, nil
+						// 相对路径 —— 用 aria2 的 dir 拼接
+						if ariaDir != "" {
+							return filepath.Join(filepath.FromSlash(ariaDir), normalized), nil
+						}
+						// 再用全局 aria2 下载目录兜底
+						if u.config.Aria2.DownloadDir != "" {
+							return filepath.Join(u.config.Aria2.DownloadDir, normalized), nil
+						}
 					}
 				}
 			}

@@ -14,6 +14,8 @@ request.interceptors.request.use(
   }
 )
 
+const AUTH_KEY = 'openbridge_auth'
+
 request.interceptors.response.use(
   (response) => {
     const res = response.data
@@ -25,6 +27,12 @@ request.interceptors.response.use(
     return res
   },
   (error) => {
+    // 网络不通（后端重启、宕机等）→ 自动退出登录
+    if (!error.response && localStorage.getItem(AUTH_KEY)) {
+      localStorage.removeItem(AUTH_KEY)
+      window.location.href = '/login'
+    }
+
     // 提取后端返回的错误信息
     const data = error?.response?.data
     const msg = data?.msg || data?.message || error.message || 'Request Error'

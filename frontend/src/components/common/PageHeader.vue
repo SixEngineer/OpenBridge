@@ -45,7 +45,7 @@ defineProps<{
 
 .page-header__description {
   margin: 4px 0 0 0;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 14px;
   word-break: keep-all;
 }
