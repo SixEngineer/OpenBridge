@@ -55,4 +55,6 @@ const (
 
 	ErrorCodeResetFailed = 1024 // 重置用户数据失败
 
+	ErrorCodeGetUserInfoFailed = 1025 // 获取用户信息失败
+
 )

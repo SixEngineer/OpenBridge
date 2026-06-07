@@ -119,6 +119,7 @@ func main() {
 	{
 		userGroup.POST("/login", userHandler.UserLogin)
 		userGroup.DELETE("/reset", userHandler.Reset)
+		userGroup.GET("/info", userHandler.GetUserInfo)
 	}
 
 	// 注册 Storage 相关路由
