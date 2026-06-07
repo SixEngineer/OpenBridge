@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -95,7 +96,7 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 			now := time.Now()
 			task.FinishedAt = &now
 		}
-		// 任务完成时持久化实际文件路径，避免 aria2 遗忘后查不到
+		// persist actual file path when task completes, so aria2 forgetting it later doesn't matter
 		if task.Status == "complete" && task.FilePath == "" {
 			if fp := extractFilePath(status); fp != "" {
 				task.FilePath = fp
@@ -157,7 +158,7 @@ func (u *DownloadUseCase) RetryTask(taskID string) (*entity.DownloadTask, error)
 }
 
 func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, error) {
-	// 优先使用 DB 中已持久化的文件路径（aria2 完成时已保存）
+	// prefer persisted DB path (saved when aria2 completed)
 	if task.FilePath != "" {
 		normalized := filepath.FromSlash(task.FilePath)
 		if filepath.IsAbs(normalized) {
@@ -165,7 +166,7 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 		}
 	}
 
-	// 其次从 aria2 tellStatus 获取真实文件路径
+	// then try aria2 tellStatus for real path
 	status, err := u.aria2Client.TellStatus(task.Aria2GID)
 	if err == nil {
 		ariaDir, _ := status["dir"].(string)
@@ -191,7 +192,7 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 		}
 	}
 
-	// 降级：使用 config.DownloadDir + FileName 拼接
+	// fallback: config.DownloadDir + FileName
 	if task.FileName != "" && u.config.Aria2.DownloadDir != "" {
 		return filepath.Join(u.config.Aria2.DownloadDir, task.FileName), nil
 	}
@@ -199,7 +200,7 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 	return "", errors.New("cannot determine file path")
 }
 
-// 从 aria2 tellStatus 返回值中提取文件路径
+// extractFilePath extracts the file path from aria2 tellStatus response
 func extractFilePath(status map[string]interface{}) string {
 	ariaDir, _ := status["dir"].(string)
 	if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
@@ -267,11 +268,16 @@ func (u *DownloadUseCase) OpenFileLocation(taskID string) (string, error) {
 		return "", err
 	}
 
+	// verify the file exists; if not, search the download directory
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		if found := findFileInDir(u.config.Aria2.DownloadDir, task.FileName); found != "" {
+			filePath = found
+		}
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		// 直接用 explorer /select, 打开所在文件夹并选中文件。
-		// getActualFilePath 已通过 filepath.FromSlash + filepath.Abs 确保返回绝对路径。
 		cmd = exec.Command("explorer", "/select,"+filePath)
 	case "darwin":
 		cmd = exec.Command("open", "-R", filePath)
@@ -284,6 +290,23 @@ func (u *DownloadUseCase) OpenFileLocation(taskID string) (string, error) {
 	}
 
 	return filepath.Dir(filePath), nil
+}
+
+// findFileInDir searches dir for a file matching filename (case-insensitive).
+func findFileInDir(dir, filename string) string {
+	if dir == "" || filename == "" {
+		return ""
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.EqualFold(e.Name(), filename) {
+			return filepath.Join(dir, e.Name())
+		}
+	}
+	return ""
 }
 
 func (u *DownloadUseCase) CheckAria2Status() (map[string]interface{}, error) {

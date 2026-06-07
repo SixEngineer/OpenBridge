@@ -91,6 +91,7 @@ async function handleLogin() {
 <style scoped>
 .login-page {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,6 +187,7 @@ async function handleLogin() {
 @media (max-width: 860px) {
   .login-page {
     padding: 16px;
+    overflow: hidden;
   }
 
   .login-card {

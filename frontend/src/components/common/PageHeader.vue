@@ -56,13 +56,25 @@ defineProps<{
   }
 
   .page-header__top {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: 10px;
+    gap: 4px 10px;
   }
 
   .page-header__top h2 {
-    font-size: 20px;
+    font-size: 18px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .page-header__actions {
+    flex-shrink: 0;
+  }
+
+  .page-header__description {
+    width: 100%;
+    margin-top: 0;
   }
 }
 </style>

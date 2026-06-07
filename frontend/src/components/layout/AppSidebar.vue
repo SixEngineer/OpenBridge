@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
@@ -26,6 +26,15 @@ const activePath = computed(() => route.path)
 function closeOnNav() {
   store.sidebarOpen = false
 }
+
+// Lock body scroll when sidebar is open on mobile
+watch(() => store.sidebarOpen, (v) => {
+  document.body.style.overflow = v ? 'hidden' : ''
+})
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -75,6 +84,7 @@ function closeOnNav() {
     inset: 0;
     background: rgba(0, 0, 0, 0.4);
     z-index: 99;
+    touch-action: none;
   }
 }
 </style>

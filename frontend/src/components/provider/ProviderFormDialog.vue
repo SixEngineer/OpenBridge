@@ -35,7 +35,10 @@ function onDocumentClick(e: MouseEvent) {
   }
 }
 onMounted(() => document.addEventListener('click', onDocumentClick))
-onUnmounted(() => document.removeEventListener('click', onDocumentClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+  document.body.style.overflow = ''
+})
 
 const formData = ref<Partial<ProviderRecord>>({
   name: '',
@@ -99,19 +102,24 @@ watch(() => props.provider, (val) => {
 
 // 每次打开新增弹窗时重置表单（provider 为 null 时 watch 不会重复触发）
 watch(() => props.visible, (v) => {
-  if (v && !props.provider) {
-    formData.value = {
-      name: '',
-      net_disk: 'mock',
-      account_id: '',
-      access_token: '',
-      auth_cookie: '',
-      status: 'active',
-      total_quota: 0,
-      used_quota: 0,
-      available_quota: 0
+  if (v) {
+    document.body.style.overflow = 'hidden'
+    if (!props.provider) {
+      formData.value = {
+        name: '',
+        net_disk: 'mock',
+        account_id: '',
+        access_token: '',
+        auth_cookie: '',
+        status: 'active',
+        total_quota: 0,
+        used_quota: 0,
+        available_quota: 0
+      }
+      localPath.value = 'C:\\'
     }
-    localPath.value = 'C:\\'
+  } else {
+    document.body.style.overflow = ''
   }
 })
 

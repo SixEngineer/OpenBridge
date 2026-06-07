@@ -59,7 +59,10 @@ onMounted(() => {
       </button>
       <div>
         <p class="topbar__eyebrow">{{ t('topbar.title') }}</p>
-        <h1 class="topbar__title">{{ t('topbar.subtitle') }}</h1>
+        <h1 class="topbar__title">
+          <span class="topbar__title--desktop">{{ t('topbar.subtitle') }}</span>
+          <span class="topbar__title--mobile">{{ t('app.name') }}</span>
+        </h1>
       </div>
     </div>
 
@@ -263,5 +266,64 @@ onMounted(() => {
 .topbar-logout-btn:hover {
   background: #2563eb;
   border-color: #2563eb;
+}
+
+.topbar__title--mobile {
+  display: none;
+}
+
+/* ── Mobile tighter packing ── */
+@media (max-width: 860px) {
+  .topbar {
+    padding: 10px 12px;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .topbar__left {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .topbar__left .topbar__eyebrow {
+    display: none;
+  }
+
+  .topbar__title--desktop {
+    display: none;
+  }
+
+  .topbar__title--mobile {
+    display: inline;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .topbar__meta {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .topbar__meta .status-indicator {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .topbar-login-btn,
+  .topbar-logout-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .lang-switcher {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .theme-toggle {
+    padding: 5px;
+  }
 }
 </style>

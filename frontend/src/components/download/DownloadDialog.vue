@@ -30,8 +30,11 @@ const targetDir = ref(store.defaultDownloadDir)
 // Auto-resolve when dialog opens
 watch(() => props.visible, (v) => {
   if (v && props.filePath) {
+    document.body.style.overflow = 'hidden'
     resolveLink()
     copied.value = false
+  } else {
+    document.body.style.overflow = ''
   }
 })
 

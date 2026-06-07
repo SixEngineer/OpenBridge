@@ -179,7 +179,7 @@ onMounted(fetchFiles)
             <span class="file-icon">{{ f.is_dir ? '📁' : '📄' }}</span>
             {{ f.name }}
           </span>
-          <span class="file-row__size">{{ f.is_dir ? '—' : formatSize(f.size) }}</span>
+          <span class="file-row__size">{{ f.is_dir ? '' : formatSize(f.size) }}</span>
           <span class="file-row__time">{{ formatTime(f.modified) }}</span>
           <span class="file-row__action" @click.stop>
             <button
@@ -389,10 +389,11 @@ onMounted(fetchFiles)
 
   .file-row {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     padding: 14px 16px;
     position: relative;
+    align-items: center;
   }
 
   .file-row--dir {
@@ -400,19 +401,38 @@ onMounted(fetchFiles)
   }
 
   .file-row__name {
-    font-size: 15px;
+    width: 100%;
     padding-right: 80px;
+    font-size: 15px;
     white-space: normal;
     word-break: break-word;
-  }
-
-  .file-row__size {
-    font-size: 13px;
   }
 
   .file-row__time {
     font-size: 12px;
     color: var(--muted);
+    order: 1;
+  }
+
+  .file-row__time::after {
+    content: "·";
+    margin: 0 6px;
+    color: var(--border);
+  }
+
+  .file-row__size {
+    font-size: 12px;
+    color: var(--muted);
+    order: 2;
+  }
+
+  /* 文件夹不显示大小 */
+  .file-row--dir .file-row__size {
+    display: none;
+  }
+
+  .file-row--dir .file-row__time::after {
+    display: none;
   }
 
   .file-row__action {
@@ -436,6 +456,10 @@ onMounted(fetchFiles)
   .panel__header {
     flex-direction: column;
     gap: 6px;
+  }
+
+  .panel-path {
+    display: none;
   }
 }
 </style>

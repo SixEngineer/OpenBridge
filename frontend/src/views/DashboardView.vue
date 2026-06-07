@@ -608,9 +608,13 @@ onMounted(() => {
 }
 
 @media (max-width: 860px) {
+  .dashboard-panels .panel:last-child {
+    display: none;
+  }
+
   .grid--metrics {
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   .action-card {

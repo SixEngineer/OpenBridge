@@ -425,7 +425,7 @@ function formatTime(t: string | null | undefined): string {
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
-          v-for="st in ['all', 'waiting', 'active', 'error', 'complete']"
+          v-for="st in ['all', 'active', 'error', 'complete']"
           :key="st"
           class="tab-btn"
           :class="{ 'tab-btn--active': statusFilter === st }"
@@ -1115,6 +1115,18 @@ function formatTime(t: string | null | undefined): string {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
+  }
+
+  .tab-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .tab-btn--active {
+    background: #3b82f6 !important;
+    color: white !important;
+    border-color: #3b82f6 !important;
   }
 
   .task-table__head {

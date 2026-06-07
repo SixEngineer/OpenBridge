@@ -345,31 +345,54 @@ onMounted(() => {
 @media (max-width: 860px) {
   .provider-grid {
     grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .provider-card {
-    padding: 16px;
-  }
-
-  .provider-card__header {
-    flex-direction: column;
     gap: 8px;
   }
 
+  .provider-card {
+    padding: 12px;
+  }
+
+  .provider-card__header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .provider-card__header > div:first-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .provider-card__header-right {
-    width: 100%;
-    justify-content: flex-end;
+    width: auto;
+    flex-shrink: 0;
   }
 
   .provider-card__name {
-    font-size: 16px;
+    font-size: 14px;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+  .provider-card__id {
+    font-size: 11px;
+  }
+
+  .provider-card__section-title {
+    font-size: 10px;
+    margin: 6px 0 2px 0;
+  }
+
+  .provider-card__text {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .provider-card__placeholder {
+    display: none;
   }
 }
 </style>
