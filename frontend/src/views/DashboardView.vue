@@ -6,6 +6,8 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { useConsoleStore } from '@/stores/console'
 import type { MetricCardData } from '@/types/dashboard'
+import { getProviderList } from '@/api/provider'
+import { getAria2Status } from '@/api/task'
 
 const store = useConsoleStore()
 const { t, locale } = useI18n()
@@ -110,8 +112,7 @@ const healthyCount = computed(() => {
 
 async function checkAria2() {
   try {
-    const res = await fetch('/api/v1/download/aria2-status')
-    const data = await res.json()
+    const data = await getAria2Status()
     if (data.code === 1000 && data.data) {
       aria2Status.value = 'active'
       aria2Detail.value = t('dashboard.aria2_connected', { version: data.data.version || '' })
@@ -127,8 +128,8 @@ async function checkAria2() {
 
 async function checkBackend() {
   try {
-    const res = await fetch('/api/v1/provider/list', { method: 'GET' })
-    if (res.ok) {
+    const res = await getProviderList()
+    if (res.code === 1000 || res.code === 0) {
       backendStatus.value = 'active'
       backendDetail.value = t('dashboard.backend_api_connected')
     } else {

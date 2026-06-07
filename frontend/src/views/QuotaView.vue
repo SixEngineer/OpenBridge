@@ -5,6 +5,7 @@ import { useConsoleStore } from '@/stores/console'
 import { useI18n } from 'vue-i18n'
 import type { MountPoint } from '@/types/mount'
 import type { QuotaInfo } from '@/types/quota'
+import { getProviderList } from '@/api/provider'
 
 const store = useConsoleStore()
 const { t, locale } = useI18n()
@@ -13,8 +14,8 @@ const backendStatus = ref<'active' | 'error' | 'disabled'>('active')
 
 async function checkBackend() {
   try {
-    const res = await fetch('/api/v1/provider/list', { method: 'GET' })
-    backendStatus.value = res.ok ? 'active' : 'error'
+    const res = await getProviderList()
+    backendStatus.value = (res.code === 1000 || res.code === 0) ? 'active' : 'error'
   } catch {
     backendStatus.value = 'error'
   }
