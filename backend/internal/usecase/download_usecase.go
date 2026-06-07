@@ -95,6 +95,12 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 			now := time.Now()
 			task.FinishedAt = &now
 		}
+		// 任务完成时持久化实际文件路径，避免 aria2 遗忘后查不到
+		if task.Status == "complete" && task.FilePath == "" {
+			if fp := extractFilePath(status); fp != "" {
+				task.FilePath = fp
+			}
+		}
 		u.downloadRepo.UpdateTask(task)
 	} else if strings.Contains(err.Error(), "not found") && task.Status != "complete" {
 		// GID not found in aria2 -> task was removed or expired -> mark as error.
@@ -151,10 +157,17 @@ func (u *DownloadUseCase) RetryTask(taskID string) (*entity.DownloadTask, error)
 }
 
 func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, error) {
-	// 优先从 aria2 tellStatus 获取真实文件路径
+	// 优先使用 DB 中已持久化的文件路径（aria2 完成时已保存）
+	if task.FilePath != "" {
+		normalized := filepath.FromSlash(task.FilePath)
+		if filepath.IsAbs(normalized) {
+			return normalized, nil
+		}
+	}
+
+	// 其次从 aria2 tellStatus 获取真实文件路径
 	status, err := u.aria2Client.TellStatus(task.Aria2GID)
 	if err == nil {
-		// aria2 tellStatus 返回的下载目录（用于相对路径拼接）
 		ariaDir, _ := status["dir"].(string)
 
 		if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
@@ -163,15 +176,12 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 					path = strings.TrimSpace(path)
 					if path != "" {
 						normalized := filepath.FromSlash(path)
-						// 绝对路径直接用
 						if filepath.IsAbs(normalized) {
 							return normalized, nil
 						}
-						// 相对路径 —— 用 aria2 的 dir 拼接
 						if ariaDir != "" {
 							return filepath.Join(filepath.FromSlash(ariaDir), normalized), nil
 						}
-						// 再用全局 aria2 下载目录兜底
 						if u.config.Aria2.DownloadDir != "" {
 							return filepath.Join(u.config.Aria2.DownloadDir, normalized), nil
 						}
@@ -187,6 +197,29 @@ func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, 
 	}
 
 	return "", errors.New("cannot determine file path")
+}
+
+// 从 aria2 tellStatus 返回值中提取文件路径
+func extractFilePath(status map[string]interface{}) string {
+	ariaDir, _ := status["dir"].(string)
+	if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
+		if f, ok := files[0].(map[string]interface{}); ok {
+			if path, ok := f["path"].(string); ok {
+				path = strings.TrimSpace(path)
+				if path == "" {
+					return ""
+				}
+				normalized := filepath.FromSlash(path)
+				if filepath.IsAbs(normalized) {
+					return normalized
+				}
+				if ariaDir != "" {
+					return filepath.Join(filepath.FromSlash(ariaDir), normalized)
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (u *DownloadUseCase) OpenFile(taskID string) (string, error) {

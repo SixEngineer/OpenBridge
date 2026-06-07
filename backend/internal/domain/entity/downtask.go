@@ -10,6 +10,8 @@ type DownloadTask struct {
 	FileName          string `gorm:"size:255"`
 	FileSize          int64
 	DirectLink        string  `gorm:"type:text"`
+	// 下载完成后 aria2 返回的绝对路径，持久化到 DB 以免 aria2 遗忘后查不到
+	FilePath          string  `gorm:"type:text"`
 	// ProviderAccountID *uint   `gorm:"index"`
 	// ProviderType      string  `gorm:"size:50;index"`
 	Aria2GID          string  `gorm:"size:64;index"`

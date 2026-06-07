@@ -22,6 +22,7 @@ export interface DownloadTask {
   FileName: string
   FileSize: number
   DirectLink: string
+  FilePath: string
   Aria2GID: string
   Status: string
   Progress: number
