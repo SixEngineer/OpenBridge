@@ -54,3 +54,15 @@ func (h *UserHandler) Reset(c *gin.Context) {
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: nil})
 }
+
+// 获取用户数据
+func (h *UserHandler) GetUserInfo(c *gin.Context) {
+    
+	userInfo, err := h.userUseCase.GetUserInfo()
+	if err != nil {
+	    c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeGetUserInfoFailed, Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: userInfo})
+}

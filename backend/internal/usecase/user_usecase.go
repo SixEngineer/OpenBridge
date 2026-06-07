@@ -116,3 +116,54 @@ func (uc *UserUseCase) ClearAllTables(db *gorm.DB) error {
         return nil
     })
 }
+
+type Response struct {
+    Code    int        `json:"code"`
+    Message string     `json:"message"`
+    Data    UserInfo   `json:"data"`
+}
+
+type UserInfo struct {
+    ID         int    `json:"id"`
+    Username   string `json:"username"`
+    Password   string `json:"password"`
+    BasePath   string `json:"base_path"`
+    Role       int    `json:"role"`
+    Disabled   bool   `json:"disabled"`
+    Permission int    `json:"permission"`
+    SSOID      string `json:"sso_id"`
+    OTP        bool   `json:"otp"`
+}
+
+// 获取用户数据
+func (uc *UserUseCase) GetUserInfo() (UserInfo, error) {
+
+	// HTTP 配置，设置超时为10秒
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// 创建一个新的HTTP GET请求，目标URL为OpenList的用户信息接口
+	req, err := http.NewRequest("GET", uc.config.OpenList.BaseURL + "/api/me", nil)
+	if err != nil {
+		return UserInfo{}, err
+	}
+
+	// 设置请求头，指定内容类型为JSON，并设置User-Agent和Token
+	req.Header.Set("User-Agent", "OpenBridge/1.0")
+	req.Header.Set("Authorization", uc.config.OpenList.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	// 发送HTTP请求并获取响应
+	resp, err := client.Do(req)
+	if err != nil {
+		return UserInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	// 解析响应体，提取用户信息
+	var result Response
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return UserInfo{}, err
+	}
+
+	return result.Data, nil
+}
