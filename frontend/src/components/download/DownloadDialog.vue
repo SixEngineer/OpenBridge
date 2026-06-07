@@ -413,4 +413,57 @@ code.info-row__value {
   flex-direction: column;
   gap: 6px;
 }
+
+/* ════════════════════════════════════════════
+   Mobile: full-screen dialog
+   ════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .overlay {
+    align-items: flex-end;
+  }
+
+  .dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto;
+    margin-top: auto;
+  }
+
+  .dialog__header {
+    padding: 16px 20px 0;
+    position: sticky;
+    top: 0;
+    background: var(--surface-strong);
+    z-index: 1;
+  }
+
+  .dialog__body {
+    padding: 16px 20px;
+  }
+
+  .dialog__footer {
+    padding: 0 20px 20px;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface-strong);
+  }
+
+  .link-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .link-row code {
+    word-break: break-all;
+  }
+
+  .btn--copy {
+    align-self: flex-start;
+  }
+
+  .info-row {
+    margin-bottom: 10px;
+  }
+}
 </style>

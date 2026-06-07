@@ -404,4 +404,29 @@ code.info-field__value {
   overflow-y: auto;
   margin: 0;
 }
+
+@media (max-width: 860px) {
+  .debug-grid {
+    gap: 14px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .panel__header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .provider-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .provider-row__info {
+    width: 100%;
+  }
+}
 </style>

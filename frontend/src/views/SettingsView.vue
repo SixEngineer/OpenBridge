@@ -391,4 +391,34 @@ onMounted(() => {
   font-size: 14px;
   margin: 0;
 }
+
+@media (max-width: 860px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .config-input {
+    width: 100%;
+  }
+
+  .user-info__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .user-info__value {
+    text-align: left;
+  }
+}
 </style>

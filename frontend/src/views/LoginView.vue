@@ -182,4 +182,20 @@ async function handleLogin() {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+@media (max-width: 860px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 28px 24px;
+  }
+
+  .login-card__title {
+    font-size: 20px;
+  }
+}
 </style>

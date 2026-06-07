@@ -109,6 +109,12 @@ export const useConsoleStore = defineStore('console', () => {
     localStorage.removeItem(AUTH_KEY)
   }
 
+  // ── UI state ──
+  const sidebarOpen = ref(false)
+  function toggleSidebar() {
+    sidebarOpen.value = !sidebarOpen.value
+  }
+
   // Default download directory
   const DD_KEY = 'openbridge_default_download_dir'
   const defaultDownloadDir = ref(localStorage.getItem(DD_KEY) || '')
@@ -421,5 +427,7 @@ export const useConsoleStore = defineStore('console', () => {
     fetchCurrentUser,
     defaultDownloadDir,
     setDefaultDownloadDir,
+    sidebarOpen,
+    toggleSidebar,
   }
 })

@@ -606,4 +606,40 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 860px) {
+  .grid--metrics {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .action-card {
+    padding: 16px;
+  }
+
+  .action-card__icon {
+    font-size: 26px;
+  }
+
+  .qstat__value {
+    font-size: 13px;
+  }
+
+  .quota-expand {
+    padding: 14px;
+  }
+
+  .quota-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quota-provider-card__body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quota-provider-card__chart-wrap {
+    align-self: center;
+  }
+}
 </style>

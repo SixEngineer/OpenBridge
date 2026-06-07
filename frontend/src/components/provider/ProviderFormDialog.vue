@@ -572,4 +572,51 @@ function handleSubmit() {
 .btn--secondary:hover {
   background: var(--surface-strong);
 }
+
+@media (max-width: 860px) {
+  .dialog-overlay {
+    align-items: flex-end;
+  }
+
+  .dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    margin-top: auto;
+  }
+
+  .dialog__header {
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    background: var(--surface-strong);
+    z-index: 1;
+  }
+
+  .dialog__body {
+    padding: 16px 20px;
+  }
+
+  .dialog__footer {
+    padding: 16px 20px;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface-strong);
+    flex-direction: column;
+  }
+
+  .dialog__footer .btn {
+    width: 100%;
+  }
+
+  .token-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn--link {
+    justify-content: center;
+  }
+}
 </style>

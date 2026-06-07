@@ -378,4 +378,64 @@ onMounted(fetchFiles)
 .sort-arrow {
   font-size: 11px;
 }
+
+/* ════════════════════════════════════════════
+   Mobile: table → card layout
+   ════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .file-table__head {
+    display: none;
+  }
+
+  .file-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    position: relative;
+  }
+
+  .file-row--dir {
+    font-weight: 600;
+  }
+
+  .file-row__name {
+    font-size: 15px;
+    padding-right: 80px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .file-row__size {
+    font-size: 13px;
+  }
+
+  .file-row__time {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .file-row__action {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+  }
+
+  .btn-download {
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+
+  .breadcrumb {
+    font-size: 13px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel__header {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
 </style>

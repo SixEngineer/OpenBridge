@@ -1087,4 +1087,111 @@ function formatTime(t: string | null | undefined): string {
   padding: 20px;
   border: 1px solid var(--border);
 }
+
+/* ════════════════════════════════════════════
+   Mobile: table → card layout
+   ════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .create-form {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .create-form__field {
+    width: 100%;
+  }
+
+  .create-panel {
+    margin-bottom: 12px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .toolbar__tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .task-table__head {
+    display: none;
+  }
+
+  .task-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .task-row:last-child {
+    border-bottom: none;
+  }
+
+  .task-row__checkbox {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  .task-row__checkbox input[type="checkbox"] {
+    opacity: 1;
+    width: 18px;
+    height: 18px;
+  }
+
+  .task-row__name {
+    padding-right: 32px;
+    font-size: 15px;
+    flex-wrap: wrap;
+  }
+
+  .task-row__actions {
+    display: inline-flex;
+  }
+
+  .task-row__delete,
+  .task-row__open {
+    padding: 6px;
+  }
+
+  .task-row__size {
+    font-size: 13px;
+  }
+
+  .task-row__status {
+    margin: 2px 0;
+  }
+
+  .task-row__time {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .task-row__time .btn--retry {
+    margin-left: 0;
+  }
+
+  /* Detail panel */
+  .detail-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .direct-link-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .direct-link-value {
+    white-space: normal;
+    word-break: break-all;
+  }
+}
 </style>

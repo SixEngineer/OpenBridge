@@ -99,7 +99,7 @@ function getMountCache(mountId: number): MountQuotaCache {
 const editingMountId = ref<number | null>(null)
 const editForm = reactive<{
   name: string
-  quota_mode: string
+  quota_mode: 'real' | 'inherit' | 'virtual'
   virtual_total: number
   virtual_used: number
   inherit_from_id: number | null
@@ -154,7 +154,7 @@ async function handleEditSave(mountId: number) {
     payload.virtual_total = editForm.virtual_total
     payload.virtual_used = editForm.virtual_used
   } else if (editForm.quota_mode === 'inherit') {
-    payload.inherit_from_id = editForm.inherit_from_id
+    payload.inherit_from_id = editForm.inherit_from_id ?? undefined
   }
   const result = await store.updateMountById(mountId, payload)
   if (result) {
@@ -1297,5 +1297,119 @@ watch(selectedProviderId, async () => {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+/* ════════════════════════════════════════════
+   Mobile: responsive QuotaView
+   ════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .quota-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+
+  .provider-dropdown {
+    min-width: 0;
+  }
+
+  .button-group {
+    margin-left: 0;
+  }
+
+  .button-group .btn {
+    width: 100%;
+  }
+
+  .mode-options {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mode-option {
+    padding: 12px;
+  }
+
+  .mount-card {
+    padding: 16px;
+    border-radius: 10px;
+  }
+
+  .mount-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .mount-card__header-left {
+    flex-wrap: wrap;
+  }
+
+  .mount-card__header-right {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .mount-card__title {
+    font-size: 16px;
+  }
+
+  .quota-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .quota-stat__value {
+    font-size: 20px;
+  }
+
+  .mount-card__footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .mount-card__footer .btn {
+    width: 100%;
+  }
+
+  .virtual-input,
+  .inherit-select {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .virtual-input__field,
+  .inherit-select__field {
+    width: 100%;
+  }
+
+  .create-actions {
+    justify-content: stretch;
+  }
+  .create-actions .btn {
+    width: 100%;
+  }
+
+  .edit-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .edit-actions .btn {
+    width: 100%;
+  }
+
+  .dialog {
+    min-width: 0;
+    width: calc(100% - 32px);
+    max-width: 100%;
+    padding: 20px;
+    margin: 0 16px;
+  }
 }
 </style>

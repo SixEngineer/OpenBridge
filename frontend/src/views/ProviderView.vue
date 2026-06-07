@@ -341,4 +341,35 @@ onMounted(() => {
 .toast-fade-leave-active { transition: all 0.3s ease; }
 .toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+
+@media (max-width: 860px) {
+  .provider-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .provider-card {
+    padding: 16px;
+  }
+
+  .provider-card__header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .provider-card__header-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .provider-card__name {
+    font-size: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
 </style>

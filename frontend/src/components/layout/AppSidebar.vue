@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConsoleStore } from '@/stores/console'
 import type { NavItem } from '@/types/common'
 
 const { t } = useI18n()
 const route = useRoute()
+const store = useConsoleStore()
 
 const allItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', description: 'System overview', i18nKey: 'dashboard', i18nDescKey: 'dashboard_desc' },
@@ -20,12 +22,23 @@ const allItems: NavItem[] = [
 const items = computed(() => allItems)
 
 const activePath = computed(() => route.path)
+
+function closeOnNav() {
+  store.sidebarOpen = false
+}
 </script>
 
 <template>
-  <aside class="sidebar">
+  <!-- Mobile overlay -->
+  <div
+    v-if="store.sidebarOpen"
+    class="sidebar-overlay"
+    @click="store.sidebarOpen = false"
+  ></div>
+
+  <aside class="sidebar" :class="{ 'sidebar--open': store.sidebarOpen }">
     <div>
-      <router-link to="/" class="brand">
+      <router-link to="/" class="brand" @click="closeOnNav">
         <span class="brand__mark">OB</span>
         <div>
           <p class="brand__title">{{ t('app.name') }}</p>
@@ -40,12 +53,28 @@ const activePath = computed(() => route.path)
           :to="item.path"
           class="nav__link"
           :class="{ 'nav__link--active': activePath === item.path }"
+          @click="closeOnNav"
         >
           <span class="nav__label">{{ item.i18nKey ? t('sidebar.items.' + item.i18nKey) : item.label }}</span>
           <span class="nav__description">{{ item.i18nDescKey ? t('sidebar.items.' + item.i18nDescKey) : item.description }}</span>
         </RouterLink>
       </nav>
     </div>
-
   </aside>
 </template>
+
+<style scoped>
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 99;
+  }
+}
+</style>

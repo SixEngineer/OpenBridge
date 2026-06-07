@@ -49,4 +49,20 @@ defineProps<{
   font-size: 14px;
   word-break: keep-all;
 }
+
+@media (max-width: 860px) {
+  .page-header {
+    margin-bottom: 16px;
+  }
+
+  .page-header__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .page-header__top h2 {
+    font-size: 20px;
+  }
+}
 </style>

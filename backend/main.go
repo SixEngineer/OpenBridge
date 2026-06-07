@@ -11,6 +11,7 @@ import (
 	"openbridge/backend/internal/usecase"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -151,6 +152,19 @@ func main() {
 		downloadGroup.POST("/tasks/:id/open", downloadHandler.OpenFile)
 			downloadGroup.POST("/tasks/:id/open-location", downloadHandler.OpenFileLocation)
 	}
+
+	// ── 托管前端静态文件 ──
+	r.Static("/assets", "./frontend/dist/assets")
+	r.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+
+	// SPA 回退：所有非 API 路径返回 index.html（支持前端路由）
+	r.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(404, gin.H{"code": 404, "msg": "Not Found"})
+			return
+		}
+		c.File("./frontend/dist/index.html")
+	})
 
 	if err := r.Run(":" + allConfig.App.Port); err != nil {
 		logger.L().Fatal("http server run failed", zap.Error(err))

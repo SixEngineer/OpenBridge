@@ -32,9 +32,9 @@ function handleLogout() {
 
 async function checkOpenList() {
   try {
-    const res = await getDrivers()
-    // "已连接" = 已登录 OpenBridge + 从 OpenList 拿到了驱动列表
-    openListStatus.value = store.isLoggedIn && res.data && res.data.length > 0 ? 'connected' : 'disconnected'
+    // 随便发个请求给 OpenList，只要后端回包就算已连接
+    await getDrivers()
+    openListStatus.value = store.isLoggedIn ? 'connected' : 'disconnected'
   } catch {
     openListStatus.value = 'disconnected'
   }
@@ -51,9 +51,16 @@ onMounted(() => {
 
 <template>
   <header class="topbar">
-    <div>
-      <p class="topbar__eyebrow">{{ t('topbar.title') }}</p>
-      <h1 class="topbar__title">{{ t('topbar.subtitle') }}</h1>
+    <div class="topbar__left">
+      <button class="hamburger" @click="store.toggleSidebar()" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div>
+        <p class="topbar__eyebrow">{{ t('topbar.title') }}</p>
+        <h1 class="topbar__title">{{ t('topbar.subtitle') }}</h1>
+      </div>
     </div>
 
     <div class="topbar__meta">
@@ -100,6 +107,36 @@ onMounted(() => {
   color: #3b82f6;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Hamburger — visible only on mobile */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform 0.2s;
+}
+@media (max-width: 860px) {
+  .hamburger {
+    display: flex;
+  }
 }
 
 .topbar__title {
