@@ -1,7 +1,0 @@
-"filename", "language", "Go", "TypeScript", "comment", "blank", "total"
-"f:\OpenBridge\Monorepo\backend\internal\handler\system_handler.go", "Go", 29, 0, 0, 9, 38
-"f:\OpenBridge\Monorepo\backend\internal\tool\path_picker.go", "Go", 187, 0, 0, 24, 211
-"f:\OpenBridge\Monorepo\backend\internal\usecase\system_usecase.go", "Go", 37, 0, 0, 10, 47
-"f:\OpenBridge\Monorepo\backend\main.go", "Go", 6, 0, 0, 1, 7
-"f:\OpenBridge\Monorepo\frontend\src\api\endpoints.ts", "TypeScript", 0, 1, 1, 1, 3
-"Total", "-", 259, 1, 1, 45, 306
