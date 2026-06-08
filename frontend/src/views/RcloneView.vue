@@ -10,6 +10,7 @@ import {
   deleteRcloneProfile,
   listRcloneProfiles,
   mountRcloneProfile,
+  unmountRcloneProfile,
   updateRcloneProfile,
 } from '@/api/rclone'
 import type { RcloneProfile, RcloneProfileInput } from '@/types/rclone'
@@ -23,6 +24,7 @@ const dialogVisible = ref(false)
 const editingProfile = ref<RcloneProfile | null>(null)
 const applyingId = ref<number | null>(null)
 const mountingId = ref<number | null>(null)
+const unmountingId = ref<number | null>(null)
 
 const toast = ref({ show: false, message: '', type: 'success' as 'success' | 'error' })
 let toastTimer: ReturnType<typeof setTimeout> | null = null
@@ -113,6 +115,19 @@ async function handleMount(profile: RcloneProfile) {
   }
 }
 
+async function handleUnmount(profile: RcloneProfile) {
+  unmountingId.value = profile.id
+  try {
+    await unmountRcloneProfile(profile.id)
+    await fetchProfiles()
+    showToast(t('rclone.unmount_success'))
+  } catch (error: any) {
+    showToast(error?.message || t('rclone.unmount_failed'), 'error')
+  } finally {
+    unmountingId.value = null
+  }
+}
+
 async function copyText(value: string) {
   await navigator.clipboard.writeText(value)
   showToast(t('rclone.copied'))
@@ -181,6 +196,14 @@ onMounted(async () => {
             <span class="meta-label">{{ t('rclone.last_mounted') }}</span>
             <span class="meta-value">{{ profile.last_mounted_at ? formatTime(profile.last_mounted_at) : t('rclone.not_mounted') }}</span>
           </div>
+          <div>
+            <span class="meta-label">{{ t('rclone.mount_status') }}</span>
+            <span class="meta-value">{{ profile.is_mounted ? t('rclone.mounted') : t('rclone.not_mounted_status') }}</span>
+          </div>
+          <div v-if="profile.mount_pid">
+            <span class="meta-label">{{ t('rclone.mount_pid') }}</span>
+            <span class="meta-value">{{ profile.mount_pid }}</span>
+          </div>
         </div>
 
         <div v-if="profile.last_error" class="error-box">{{ profile.last_error }}</div>
@@ -200,6 +223,14 @@ onMounted(async () => {
         <div class="footer-actions" v-if="store.isAdmin">
           <button class="btn btn--secondary" :disabled="applyingId === profile.id" @click="handleApply(profile)">
             {{ applyingId === profile.id ? t('rclone.apply') + '...' : t('rclone.apply') }}
+          </button>
+          <button
+            v-if="profile.is_mounted"
+            class="btn btn--secondary"
+            :disabled="unmountingId === profile.id"
+            @click="handleUnmount(profile)"
+          >
+            {{ unmountingId === profile.id ? t('rclone.unmount') + '...' : t('rclone.unmount') }}
           </button>
           <button class="btn btn--primary" :disabled="mountingId === profile.id" @click="handleMount(profile)">
             {{ mountingId === profile.id ? t('rclone.mount') + '...' : t('rclone.mount') }}

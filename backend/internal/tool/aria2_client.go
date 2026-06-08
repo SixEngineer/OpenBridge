@@ -119,6 +119,25 @@ func (a *Aria2Client) GetVersion() (map[string]interface{}, error) {
 	return version, nil
 }
 
+func (a *Aria2Client) GetGlobalStat() (map[string]interface{}, error) {
+	rpcURL, secret := a.snapshot()
+	params := []interface{}{}
+	if secret != "" {
+		params = append(params, "token:"+secret)
+	}
+
+	result, err := a.call(rpcURL, "aria2.getGlobalStat", params)
+	if err != nil {
+		return nil, err
+	}
+
+	stats, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("aria2 getGlobalStat response invalid")
+	}
+	return stats, nil
+}
+
 func (a *Aria2Client) Remove(gid string) (string, error) {
 	rpcURL, secret := a.snapshot()
 	params := []interface{}{}

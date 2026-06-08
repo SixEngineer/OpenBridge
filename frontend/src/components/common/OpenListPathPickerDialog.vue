@@ -61,7 +61,7 @@ async function fetchFiles() {
   error.value = ''
   provider.value = ''
   try {
-    const res = await getFiles({ path: currentPath.value, page: 1, per_page: 200 })
+    const res = await getFiles({ path: currentPath.value, page: 1, per_page: 200 }, { timeout: 0 })
     files.value = (res.data?.content || []) as StorageEntry[]
     provider.value = res.data?.provider || ''
   } catch (err) {

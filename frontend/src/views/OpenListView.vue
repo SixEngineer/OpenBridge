@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import DownloadDialog from '@/components/download/DownloadDialog.vue'
 import { getFiles } from '@/api/storage'
+import { useConsoleStore } from '@/stores/console'
 
 const { t, locale } = useI18n()
+const store = useConsoleStore()
 
 const currentPath = ref('/')
 const pathInput = ref('/')
@@ -13,6 +15,7 @@ const files = ref<any[]>([])
 const filesLoading = ref(false)
 const filesError = ref('')
 const contentProvider = ref('')
+let fetchSequence = 0
 
 // Sort state
 const sortField = ref<'name' | 'size' | 'modified'>('name')
@@ -75,28 +78,41 @@ function onDownloadSuccess(taskId: string) {
   // Dialog stays open to show success, user closes manually
 }
 
-async function fetchFiles() {
+function resetBrowser(path = '/') {
+  currentPath.value = path
+  pathInput.value = path
+  files.value = []
+  filesError.value = ''
+  contentProvider.value = ''
+}
+
+async function fetchFiles(path = pathInput.value) {
+  const sequence = ++fetchSequence
   filesLoading.value = true
   filesError.value = ''
-  currentPath.value = pathInput.value
+  currentPath.value = path
+  pathInput.value = path
   contentProvider.value = ''
   try {
-    const res = await getFiles({ path: pathInput.value, page: 1, per_page: 50 })
+    const res = await getFiles({ path, page: 1, per_page: 50 })
+    if (sequence !== fetchSequence) return
     if (res.code === 1000) {
       files.value = res.data?.content || []
       contentProvider.value = res.data?.provider || ''
     }
   } catch (e: any) {
+    if (sequence !== fetchSequence) return
     filesError.value = e?.message || 'Failed to load files'
     files.value = []
   } finally {
-    filesLoading.value = false
+    if (sequence === fetchSequence) {
+      filesLoading.value = false
+    }
   }
 }
 
 function navigateTo(path: string) {
-  pathInput.value = path
-  fetchFiles()
+  void fetchFiles(path)
 }
 
 const breadcrumbSegments = computed(() => {
@@ -137,7 +153,25 @@ function formatTime(t: string | number | Date): string {
   }
 }
 
-onMounted(fetchFiles)
+onMounted(() => {
+  if (store.isLoggedIn) {
+    void fetchFiles('/')
+  }
+})
+
+watch(() => store.isLoggedIn, (loggedIn) => {
+  if (!loggedIn) {
+    fetchSequence += 1
+    filesLoading.value = false
+    resetBrowser('/')
+  }
+})
+
+watch(() => store.openListSessionKey, (sessionKey, previousKey) => {
+  if (!sessionKey || sessionKey === previousKey) return
+  resetBrowser('/')
+  void fetchFiles('/')
+})
 </script>
 
 <template>

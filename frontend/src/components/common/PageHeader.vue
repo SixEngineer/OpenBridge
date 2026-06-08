@@ -22,14 +22,15 @@ defineProps<{
 
 <style scoped>
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .page-header__top {
   display: flex;
-  align-items: center;  
+  align-items: flex-end;
   justify-content: space-between;
   width: 100%; 
+  gap: 12px 18px;
 }
 
 .page-header__top h2 {
@@ -44,15 +45,16 @@ defineProps<{
 }
 
 .page-header__description {
-  margin: 4px 0 0 0;
+  margin: 6px 0 0 0;
   color: var(--muted);
   font-size: 14px;
   word-break: keep-all;
+  max-width: 640px;
 }
 
 @media (max-width: 860px) {
   .page-header {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
 
   .page-header__top {

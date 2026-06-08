@@ -23,6 +23,7 @@ import type { Router } from 'vue-router'
 import {
   clearLocalSession,
   clearLogoutReason,
+  ensureDeviceId,
   isSessionExpired,
   readLocalSession,
   readLogoutReason,
@@ -113,6 +114,12 @@ export const useConsoleStore = defineStore('console', () => {
   const logoutReason = ref(readLogoutReason())
   const isLoggedIn = computed(() => localSession.value !== null)
   const currentUser = computed(() => localSession.value?.username ?? '')
+  const currentOpenListBaseURL = computed(() => localSession.value?.openListBaseURL ?? '')
+  const openListSessionKey = computed(() => {
+    const session = localSession.value
+    if (!session) return ''
+    return `${session.username}|${session.openListBaseURL}|${session.backendInstanceId}`
+  })
   const lastSessionCheckAt = ref(0)
   let sessionMonitorStarted = false
   let sessionMonitorTimer: number | null = null
@@ -130,6 +137,7 @@ export const useConsoleStore = defineStore('console', () => {
     if (!localSession.value) return
     applySession({
       ...localSession.value,
+      deviceId: localSession.value.deviceId,
       lastActiveAt: now,
       timeoutMinutes: sessionTimeoutMinutes.value,
     })
@@ -137,10 +145,12 @@ export const useConsoleStore = defineStore('console', () => {
 
   function login(username: string, status: SessionStatus) {
     const now = Date.now()
+    const deviceId = status.device_id || ensureDeviceId()
     clearLogoutReason()
     logoutReason.value = ''
     applySession({
       username,
+      deviceId,
       issuedAt: now,
       lastActiveAt: now,
       timeoutMinutes: sessionTimeoutMinutes.value,
@@ -220,13 +230,21 @@ export const useConsoleStore = defineStore('console', () => {
       const status = await fetchSessionStatus()
       if (
         !status.authenticated ||
-        status.fingerprint !== session.backendFingerprint ||
+        status.device_id !== session.deviceId ||
+        status.openlist_base_url !== session.openListBaseURL ||
         (status.username && status.username !== session.username)
       ) {
         logout(status.reason || 'session_changed')
         return false
       }
 
+      applySession({
+        ...session,
+        backendFingerprint: status.fingerprint,
+        backendInstanceId: status.backend_instance_id,
+        openListBaseURL: status.openlist_base_url,
+        lastActiveAt: now,
+      })
       lastSessionCheckAt.value = now
       return true
     } catch (error) {
@@ -257,8 +275,11 @@ export const useConsoleStore = defineStore('console', () => {
     if (!localSession.value) return
     const valid = await validateSession({ forceRemote: true })
     if (!valid) return
-    fetchCurrentUser()
-    fetchAllMounts()
+    await Promise.allSettled([
+      fetchCurrentUser(),
+      fetchAllMounts(),
+      fetchProviders(),
+    ])
   }
 
   function startSessionMonitor(router: Router) {
@@ -598,6 +619,8 @@ export const useConsoleStore = defineStore('console', () => {
     removeTaskId,
     isLoggedIn,
     currentUser,
+    currentOpenListBaseURL,
+    openListSessionKey,
     login,
     logout,
     validateSession,

@@ -33,12 +33,12 @@ func NewDownloadUseCase(storageUseCase *StorageUseCase, downloadRepo *repository
 	}
 }
 
-func (u *DownloadUseCase) CreateTask(path string, dir string) (*entity.DownloadTask, error) {
+func (u *DownloadUseCase) CreateTask(deviceID string, path string, dir string) (*entity.DownloadTask, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("path empty")
 	}
 
-	directLink, err := u.storageUseCase.ResolveDirectLink(path)
+	directLink, err := u.storageUseCase.ResolveDirectLinkForDevice(deviceID, path)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (u *DownloadUseCase) CreateTask(path string, dir string) (*entity.DownloadT
 	task := &entity.DownloadTask{
 		TaskID:          newTaskID(),
 		OpenListBaseURL: config.NormalizeBaseURLScope(u.config.OpenList.BaseURL),
-		SourcePath:      path,
+		SourcePath:      directLink.StoragePath,
 		DirectLink:      directLink.DirectLink,
 		FileName:        directLink.Name,
 		FileSize:        directLink.Size,
@@ -113,13 +113,13 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 	return task, nil
 }
 
-func (u *DownloadUseCase) RetryTask(taskID string) (*entity.DownloadTask, error) {
+func (u *DownloadUseCase) RetryTask(deviceID string, taskID string) (*entity.DownloadTask, error) {
 	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
 	if err != nil {
 		return nil, errors.New("task not found")
 	}
 
-	directLink, err := u.storageUseCase.ResolveDirectLink(task.SourcePath)
+	directLink, err := u.storageUseCase.ResolveDirectLinkForDevice(deviceID, task.SourcePath)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +316,15 @@ func (u *DownloadUseCase) CheckAria2Status() (map[string]interface{}, error) {
 	version, err := u.aria2Client.GetVersion()
 	if err != nil {
 		return nil, err
+	}
+	stats, err := u.aria2Client.GetGlobalStat()
+	if err == nil {
+		if downloadSpeed, ok := stats["downloadSpeed"]; ok {
+			version["downloadSpeed"] = downloadSpeed
+		}
+		if uploadSpeed, ok := stats["uploadSpeed"]; ok {
+			version["uploadSpeed"] = uploadSpeed
+		}
 	}
 	return version, nil
 }

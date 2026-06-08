@@ -136,10 +136,6 @@ async function handleReset() {
             <span class="info-field__label">{{ t('settings.proxy_target') }}</span>
             <code class="info-field__value">http://localhost:8080</code>
           </div>
-          <div class="info-field">
-            <span class="info-field__label">{{ t('settings.timeout') }}</span>
-            <span class="info-field__value">10s</span>
-          </div>
         </div>
       </section>
 

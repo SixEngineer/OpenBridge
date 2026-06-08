@@ -8,6 +8,9 @@ export interface RcloneProfile {
   username: string
   target_path: string
   password_saved: boolean
+  is_mounted: boolean
+  mount_pid: number
+  mount_rc_addr: string
   last_applied_at?: string | null
   last_mounted_at?: string | null
   last_error?: string

@@ -17,7 +17,6 @@ const allItems: NavItem[] = [
   { label: 'Quota', path: '/quota', description: 'Capacity monitoring', i18nKey: 'quota', i18nDescKey: 'quota_desc' },
   { label: 'Rclone', path: '/rclone', description: 'Mount profiles', i18nKey: 'rclone', i18nDescKey: 'rclone_desc' },
   { label: 'Settings', path: '/settings', description: 'Policy and configuration', i18nKey: 'settings', i18nDescKey: 'settings_desc' },
-  { label: 'Debug', path: '/debug', description: 'Trace and diagnostics', i18nKey: 'debug', i18nDescKey: 'debug_desc' },
 ]
 
 const userVisiblePaths = new Set(['/dashboard', '/openlist', '/providers', '/tasks'])

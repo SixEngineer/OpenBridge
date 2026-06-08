@@ -16,6 +16,10 @@ const loading = ref(false)
 const errorMsg = ref('')
 
 async function handleLogin() {
+  if (loading.value) {
+    return
+  }
+
   const name = username.value.trim()
   const pass = password.value
 
@@ -45,10 +49,21 @@ async function handleLogin() {
       errorMsg.value = (res.msg as string) || t('login.error_failed')
     }
   } catch (e: any) {
-    errorMsg.value = e?.message || t('common.request_error')
+    errorMsg.value = formatLoginError(e?.message || '')
   } finally {
     loading.value = false
   }
+}
+
+function formatLoginError(message: string) {
+  if (message.startsWith('device_limit_reached:')) {
+    const matched = message.match(/(\d+)/)
+    return t('login.error_device_limit', { count: matched ? Number(matched[1]) : 5 })
+  }
+  if (message.includes('Too many unsuccessful sign-in attempts')) {
+    return t('login.error_too_many_attempts')
+  }
+  return message || t('common.request_error')
 }
 
 function mapLogoutReason(reason: string) {
@@ -61,6 +76,8 @@ function mapLogoutReason(reason: string) {
     case 'openlist_base_url_missing':
     case 'source_changed':
       return t('login.reason_source_changed')
+    case 'device_session_missing':
+      return t('login.reason_backend_changed')
     case 'session_changed':
       return t('login.reason_session_changed')
     case 'manual':
@@ -104,7 +121,6 @@ onMounted(() => {
             placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
             autocomplete="current-password"
             ref="passwordInput"
-            @keyup.enter="handleLogin"
           />
         </label>
 

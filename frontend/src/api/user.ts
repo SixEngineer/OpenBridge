@@ -20,6 +20,9 @@ export interface SessionStatus {
   backend_instance_id: string
   openlist_base_url: string
   fingerprint: string
+  device_id: string
+  device_limit: number
+  active_device_count: number
   username?: string
   role?: number
   checked_at: number

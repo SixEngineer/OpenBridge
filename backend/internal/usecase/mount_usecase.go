@@ -47,6 +47,11 @@ type MountUseCase struct {
 	quotaRepo        *repository.QuotaRepository
 	providerRegistry *tool.Registry
 	config           *config.Config
+	profileSyncer    MountProfileSyncer
+}
+
+type MountProfileSyncer interface {
+	HandleMountDeleted(mountID uint) error
 }
 
 func NewMountUseCase(mountRepo *repository.MountRepository, providerRepo *repository.ProviderRepository, quotaRepo *repository.QuotaRepository, providerRegistry *tool.Registry, cfg *config.Config) *MountUseCase {
@@ -57,6 +62,10 @@ func NewMountUseCase(mountRepo *repository.MountRepository, providerRepo *reposi
 		providerRegistry: providerRegistry,
 		config:           cfg,
 	}
+}
+
+func (u *MountUseCase) SetProfileSyncer(syncer MountProfileSyncer) {
+	u.profileSyncer = syncer
 }
 
 // CreateMount 创建一个新的挂载点
@@ -187,7 +196,15 @@ func (u *MountUseCase) DeleteMount(ctx context.Context, mountID uint) error {
 			return ErrMountDeleteInherited
 		}
 	}
-	return u.mountRepo.DeleteMountPoint(mountID)
+	if err := u.mountRepo.DeleteMountPoint(mountID); err != nil {
+		return err
+	}
+	if u.profileSyncer != nil {
+		if err := u.profileSyncer.HandleMountDeleted(mountID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (u *MountUseCase) GetMountQuota(ctx context.Context, mountID uint) (MountQuotaResult, error) {

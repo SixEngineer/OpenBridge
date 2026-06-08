@@ -1,12 +1,15 @@
 import axios from 'axios'
+import { ensureDeviceId } from '@/utils/session'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 10000,
+  timeout: 30000,
 })
 
 request.interceptors.request.use(
   (config) => {
+    config.headers = config.headers ?? {}
+    config.headers['X-OpenBridge-Device-ID'] = ensureDeviceId()
     return config
   },
   (error) => {
