@@ -36,13 +36,14 @@ func NewDownloadHandler(downloadUseCase *usecase.DownloadUseCase, storageUseCase
 }
 
 func (h *DownloadHandler) ResolveDirectLink(c *gin.Context) {
+	deviceID := requestDeviceID(c)
 	var req ResolveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
 		return
 	}
 
-	result, err := h.storageUseCase.ResolveDirectLinkForClient(req.Path, requestOriginForDownload(c))
+	result, err := h.storageUseCase.ResolveDirectLinkForClientDevice(deviceID, req.Path, requestOriginForDownload(c))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadResolveFailed, Message: err.Error()})
 		return
@@ -52,13 +53,14 @@ func (h *DownloadHandler) ResolveDirectLink(c *gin.Context) {
 }
 
 func (h *DownloadHandler) DownloadDirect(c *gin.Context) {
+	deviceID := requestDeviceID(c)
 	path := strings.TrimSpace(c.Query("path"))
 	if path == "" {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: "path is required"})
 		return
 	}
 
-	result, err := h.storageUseCase.ResolveDirectLink(path)
+	result, err := h.storageUseCase.ResolveDirectLinkForDevice(deviceID, path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadResolveFailed, Message: err.Error()})
 		return
@@ -101,6 +103,7 @@ func (h *DownloadHandler) DownloadDirect(c *gin.Context) {
 }
 
 func (h *DownloadHandler) DownloadFolderZip(c *gin.Context) {
+	deviceID := requestDeviceID(c)
 	folderPath := strings.TrimSpace(c.Query("path"))
 	if folderPath == "" {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: "path is required"})
@@ -117,19 +120,20 @@ func (h *DownloadHandler) DownloadFolderZip(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, filename, escaped))
 	c.Header("Cache-Control", "private, max-age=60")
 
-	if _, err := h.storageUseCase.StreamFolderZip(c.Request.Context(), folderPath, c.Writer); err != nil {
+	if _, err := h.storageUseCase.StreamFolderZipForDevice(c.Request.Context(), deviceID, folderPath, c.Writer); err != nil {
 		_ = c.Error(err)
 	}
 }
 
 func (h *DownloadHandler) CreateTask(c *gin.Context) {
+	deviceID := requestDeviceID(c)
 	var req CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
 		return
 	}
 
-	task, err := h.downloadUseCase.CreateTask(req.Path, req.Dir)
+	task, err := h.downloadUseCase.CreateTask(deviceID, req.Path, req.Dir)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadCreateFailed, Message: err.Error()})
 		return
@@ -179,13 +183,21 @@ func (h *DownloadHandler) OpenFile(c *gin.Context) {
 }
 
 func (h *DownloadHandler) RetryTask(c *gin.Context) {
+	deviceID := requestDeviceID(c)
 	taskID := c.Param("id")
-	task, err := h.downloadUseCase.RetryTask(taskID)
+	task, err := h.downloadUseCase.RetryTask(deviceID, taskID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadCreateFailed, Message: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: task})
+}
+
+func requestDeviceID(c *gin.Context) string {
+	if deviceID := strings.TrimSpace(c.GetHeader(usecase.DeviceIDHeader)); deviceID != "" {
+		return deviceID
+	}
+	return strings.TrimSpace(c.Query("device_id"))
 }
 
 func requestOriginForDownload(c *gin.Context) string {

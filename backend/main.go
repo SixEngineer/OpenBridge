@@ -3,10 +3,13 @@ package main
 import (
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"openbridge/backend/internal/config"
 	"openbridge/backend/internal/domain/entity"
@@ -97,17 +100,21 @@ func runServer() {
 	}
 	userHandler := handler.NewUserHandler(userUsecase, adminChecker)
 
-	storageUsecase := usecase.NewStorageUseCase(&allConfig)
+	storageUsecase := usecase.NewStorageUseCase(&allConfig, userUsecase)
 	storageHandler := handler.NewStorageHandler(storageUsecase)
-	systemUsecase := usecase.NewSystemUseCase(&allConfig)
+	runtimeController := tool.NewRuntimeController()
+	runtimeController.RegisterBeforeStop(storageUsecase.FlushFileTreeCache)
+	systemUsecase := usecase.NewSystemUseCase(&allConfig, runtimeController)
 	systemHandler := handler.NewSystemHandler(systemUsecase)
 
 	aria2Client := tool.NewAria2Client(allConfig.Aria2.RPCURL, allConfig.Aria2.Secret)
+	tool.StartAria2IfNeeded(allConfig, aria2Client)
 	downloadUsecase := usecase.NewDownloadUseCase(storageUsecase, downloadRepo, aria2Client, &allConfig)
 	downloadHandler := handler.NewDownloadHandler(downloadUsecase, storageUsecase)
-	settingsUsecase := usecase.NewSettingsUseCase(&allConfig, aria2Client)
+	settingsUsecase := usecase.NewSettingsUseCase(&allConfig, aria2Client, storageUsecase)
 	settingsHandler := handler.NewSettingsHandler(settingsUsecase, adminChecker)
 	rcloneUsecase := usecase.NewRcloneUseCase(&allConfig, rcloneProfileRepo, mountRepo, providerRepo)
+	mountUsecase.SetProfileSyncer(rcloneUsecase)
 	rcloneHandler := handler.NewRcloneHandler(rcloneUsecase, adminChecker)
 
 	// Gin 引擎设置
@@ -160,6 +167,8 @@ func runServer() {
 	{
 		systemGroup.POST("/pick-path", systemHandler.PickLocalPath)
 		systemGroup.GET("/metrics", systemHandler.GetSystemMetrics)
+		systemGroup.POST("/restart", adminChecker.Middleware(), systemHandler.RestartApplication)
+		systemGroup.POST("/exit", adminChecker.Middleware(), systemHandler.ExitApplication)
 	}
 
 	// Download
@@ -180,9 +189,12 @@ func runServer() {
 	settingsGroup := r.Group("/api/v1/settings")
 	{
 		settingsGroup.GET("", settingsHandler.GetSettings)
+		settingsGroup.PUT("/app", adminChecker.Middleware(), settingsHandler.UpdateApp)
 		settingsGroup.PUT("/openlist", adminChecker.Middleware(), settingsHandler.UpdateOpenList)
 		settingsGroup.PUT("/aria2", adminChecker.Middleware(), settingsHandler.UpdateAria2)
 		settingsGroup.PUT("/rclone", adminChecker.Middleware(), settingsHandler.UpdateRclone)
+		settingsGroup.PUT("/session", adminChecker.Middleware(), settingsHandler.UpdateSession)
+		settingsGroup.PUT("/filetree", adminChecker.Middleware(), settingsHandler.UpdateFileTree)
 	}
 
 	rcloneGroup := r.Group("/api/v1/rclone")
@@ -193,6 +205,7 @@ func runServer() {
 		rcloneGroup.DELETE("/profiles/:id", adminChecker.Middleware(), rcloneHandler.DeleteProfile)
 		rcloneGroup.POST("/profiles/:id/apply", adminChecker.Middleware(), rcloneHandler.ApplyProfile)
 		rcloneGroup.POST("/profiles/:id/mount", adminChecker.Middleware(), rcloneHandler.MountProfile)
+		rcloneGroup.POST("/profiles/:id/unmount", adminChecker.Middleware(), rcloneHandler.UnmountProfile)
 	}
 
 	for _, method := range []string{
@@ -256,7 +269,37 @@ func runServer() {
 	})
 
 	// -------------------- 启动 --------------------
-	if err := r.Run(":" + allConfig.App.Port); err != nil {
+	addr := ":" + allConfig.App.Port
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		logger.L().Fatal("http listen failed", zap.Error(err), zap.String("addr", addr))
+	}
+
+	if allConfig.App.AutoOpenBrowser {
+		tool.OpenBrowserAfterStartup("http://localhost:" + allConfig.App.Port)
+	}
+
+	server := &http.Server{Handler: r}
+	runtimeController.BindServer(server)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	go func() {
+		<-sigCh
+		runtimeController.RequestExit()
+	}()
+
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		logger.L().Fatal("http server run failed", zap.Error(err))
+	}
+
+	if runtimeController.Action() == tool.RuntimeActionRestart {
+		if err := tool.RestartCurrentProcess(os.Args[1:]); err != nil {
+			logger.L().Error("restart current process failed", zap.Error(err))
+			return
+		}
+		logger.L().Info("restart current process requested")
 	}
 }

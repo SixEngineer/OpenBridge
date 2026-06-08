@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
+import { getAria2Status } from '@/api/task'
+import { getSystemMetrics } from '@/api/system'
 
 const router = useRouter()
 const store = useConsoleStore()
 const { locale, t } = useI18n()
 
 const openListStatus = ref<'checking' | 'connected' | 'disconnected'>('checking')
+const networkDownload = ref('—')
+const networkUpload = ref('—')
+const aria2Bandwidth = ref('')
+let statusTimer: ReturnType<typeof setInterval> | null = null
 
 const THEME_KEY = 'openbridge_theme'
 const isDark = ref(localStorage.getItem(THEME_KEY) === 'dark')
@@ -30,6 +36,18 @@ function handleLogout() {
   router.push('/login')
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
+  }
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`
+}
+
 async function checkOpenList() {
   try {
     // 随便发个请求给 OpenList，只要后端回包就算已连接
@@ -40,12 +58,54 @@ async function checkOpenList() {
   }
 }
 
+async function refreshBandwidth() {
+  try {
+    const [systemRes, aria2Res] = await Promise.allSettled([
+      getSystemMetrics(),
+      getAria2Status(),
+    ])
+
+    if (systemRes.status === 'fulfilled') {
+      const metrics = systemRes.value.data
+      networkDownload.value = `${formatBytes(Number(metrics.network_receive_bytes_per_sec ?? 0))}/s`
+      networkUpload.value = `${formatBytes(Number(metrics.network_transmit_bytes_per_sec ?? 0))}/s`
+    }
+
+    if (aria2Res.status === 'fulfilled' && aria2Res.value.data) {
+      const download = Number((aria2Res.value.data as Record<string, unknown>).downloadSpeed ?? 0)
+      const upload = Number((aria2Res.value.data as Record<string, unknown>).uploadSpeed ?? 0)
+      if (download > 0 || upload > 0) {
+        aria2Bandwidth.value = `${t('topbar.aria2_transfer')}: ${formatBytes(download)}/s ↓ · ${formatBytes(upload)}/s ↑`
+      } else {
+        aria2Bandwidth.value = ''
+      }
+    } else {
+      aria2Bandwidth.value = ''
+    }
+  } catch {
+    networkDownload.value = '—'
+    networkUpload.value = '—'
+    aria2Bandwidth.value = ''
+  }
+}
+
 onMounted(() => {
   if (isDark.value) {
     document.documentElement.dataset.theme = 'dark'
   }
-  checkOpenList()
-  setInterval(checkOpenList, 10000)
+  void checkOpenList()
+  void refreshBandwidth()
+  statusTimer = setInterval(() => {
+    void checkOpenList()
+    void refreshBandwidth()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (statusTimer) {
+    clearInterval(statusTimer)
+    statusTimer = null
+  }
 })
 </script>
 
@@ -79,6 +139,11 @@ onMounted(() => {
           </template>
           <template v-else>{{ t('topbar.openlist_disconnected') }}</template>
         </span>
+      </div>
+      <div class="bandwidth-pill" :title="aria2Bandwidth || `${t('topbar.host_download')}: ${networkDownload} | ${t('topbar.host_upload')}: ${networkUpload}`">
+        <span class="bandwidth-pill__host">{{ networkDownload }} ↓</span>
+        <span class="bandwidth-pill__host">{{ networkUpload }} ↑</span>
+        <span v-if="aria2Bandwidth" class="bandwidth-pill__aria2">{{ aria2Bandwidth }}</span>
       </div>
       <button class="lang-switcher" @click="toggleLang" :title="locale === 'en' ? t('topbar.switch_to_cn') : t('topbar.switch_to_en')">
         {{ locale === 'en' ? '中文' : 'EN' }}
@@ -153,6 +218,33 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.bandwidth-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  max-width: 420px;
+  overflow: hidden;
+}
+
+.bandwidth-pill__host,
+.bandwidth-pill__aria2 {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bandwidth-pill__aria2 {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-indicator {
@@ -303,6 +395,10 @@ onMounted(() => {
   .topbar__meta {
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  .bandwidth-pill {
+    display: none;
   }
 
   .topbar__meta .status-indicator {

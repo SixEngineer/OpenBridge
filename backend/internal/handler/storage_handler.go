@@ -15,9 +15,9 @@ type StorageHandler struct {
 }
 
 func NewStorageHandler(storageUseCase *usecase.StorageUseCase) *StorageHandler {
-    return &StorageHandler{
-        storageUseCase: storageUseCase,
-    }
+	return &StorageHandler{
+		storageUseCase: storageUseCase,
+	}
 }
 
 // 获取驱动列表
@@ -26,7 +26,7 @@ func (h *StorageHandler) GetDrivers(c *gin.Context) {
 	// 调用 usecase 获取驱动列表
 	drivers, err := h.storageUseCase.GetDrivers()
 	if err != nil {
-	    c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetDriversFailed, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetDriversFailed, Message: err.Error()})
 		return
 	}
 
@@ -36,14 +36,14 @@ func (h *StorageHandler) GetDrivers(c *gin.Context) {
 
 // 获取驱动信息
 func (h *StorageHandler) GetDriverInfo(c *gin.Context) {
-    
+
 	// 从 URL 参数中获取驱动名称
 	driverName := c.Query("name")
 
 	// 调用 usecase 获取驱动信息
 	driverInfo, err := h.storageUseCase.GetDriverInfo(driverName)
 	if err != nil {
-	    c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetDriverInfoFailed, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetDriverInfoFailed, Message: err.Error()})
 		return
 	}
 
@@ -53,7 +53,11 @@ func (h *StorageHandler) GetDriverInfo(c *gin.Context) {
 
 // 获取当前目录的文件列表
 func (h *StorageHandler) GetFiles(c *gin.Context) {
-    
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+
 	// 从 URL 参数中获取驱动名称和目录路径
 	path := c.Query("path")
 	page_str := c.Query("page")
@@ -70,9 +74,9 @@ func (h *StorageHandler) GetFiles(c *gin.Context) {
 	}
 
 	// 调用 usecase 获取文件列表
-	files, err := h.storageUseCase.GetFiles(path, uint(page), uint(per_page))
+	files, err := h.storageUseCase.GetFilesForDevice(deviceID, path, uint(page), uint(per_page))
 	if err != nil {
-	    c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetFilesFailed, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetFilesFailed, Message: err.Error()})
 		return
 	}
 
@@ -82,14 +86,15 @@ func (h *StorageHandler) GetFiles(c *gin.Context) {
 
 // 获取文件信息
 func (h *StorageHandler) GetFileInfo(c *gin.Context) {
-    
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+
 	// 从 URL 参数中获取驱动名称和文件路径
 	path := c.Query("path")
 
 	// 调用 usecase 获取文件信息
-	fileInfo, err := h.storageUseCase.GetFileInfo(path)
+	fileInfo, err := h.storageUseCase.GetFileInfoForDevice(deviceID, path)
 	if err != nil {
-	    c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetFileInfoFailed, Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, tool.HttpResult{Code: myerror.ErrorCodeGetFileInfoFailed, Message: err.Error()})
 		return
 	}
 	// 返回获取文件信息成功的结果

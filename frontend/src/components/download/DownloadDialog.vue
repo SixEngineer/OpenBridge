@@ -37,6 +37,10 @@ const props = defineProps<{
   itemName?: string
 }>()
 
+const folderScanConcurrency = 6
+const manifestResolveConcurrency = 6
+const taskCreateConcurrency = 4
+
 const emit = defineEmits<{ close: []; success: [taskId: string] }>()
 
 const resolving = ref(false)
@@ -167,7 +171,7 @@ function joinTargetDir(baseDir: string, ...parts: string[]): string {
 }
 
 async function fetchFolderPage(filePath: string, page: number, perPage: number) {
-  const res = await getFiles({ path: filePath, page, per_page: perPage })
+  const res = await getFiles({ path: filePath, page, per_page: perPage }, { timeout: 0 })
   if (res.code !== 1000) {
     throw new Error((res.msg as string) || t('download_dialog.scan_failed'))
   }
@@ -194,27 +198,59 @@ async function listFolderEntries(filePath: string): Promise<{ provider: string; 
   return { provider, entries }
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+      if (currentIndex >= items.length) {
+        return
+      }
+      results[currentIndex] = await worker(items[currentIndex], currentIndex)
+    }
+  })
+
+  await Promise.all(runners)
+  return results
+}
+
 async function collectFolderFiles(filePath: string, relativeDir = ''): Promise<FolderScanResult> {
   const { provider, entries } = await listFolderEntries(filePath)
-  const files: CollectedFolderFile[] = []
-  let totalSize = 0
-
-  for (const entry of entries) {
-    const fullPath = joinOpenListPath(filePath, entry.name)
-    if (entry.is_dir) {
-      const nested = await collectFolderFiles(fullPath, joinOpenListPath(relativeDir || '/', entry.name).replace(/^\//, ''))
-      files.push(...nested.files)
-      totalSize += nested.totalSize
-      continue
-    }
-
-    files.push({
-      path: fullPath,
+  const directFiles = entries
+    .filter(entry => !entry.is_dir)
+    .map<CollectedFolderFile>(entry => ({
+      path: joinOpenListPath(filePath, entry.name),
       name: entry.name,
       size: entry.size || 0,
       relativeDir,
-    })
-    totalSize += entry.size || 0
+    }))
+
+  const nestedDirectories = entries.filter(entry => entry.is_dir)
+  const nestedResults = await mapWithConcurrency(
+    nestedDirectories,
+    folderScanConcurrency,
+    async (entry) => {
+      const fullPath = joinOpenListPath(filePath, entry.name)
+      const nestedRelativeDir = joinOpenListPath(relativeDir || '/', entry.name).replace(/^\//, '')
+      return collectFolderFiles(fullPath, nestedRelativeDir)
+    },
+  )
+
+  const files = [...directFiles]
+  let totalSize = directFiles.reduce((sum, file) => sum + file.size, 0)
+
+  for (const nested of nestedResults) {
+    files.push(...nested.files)
+    totalSize += nested.totalSize
   }
 
   return {
@@ -276,7 +312,7 @@ async function resolveLink() {
   resolveError.value = ''
   linkResult.value = null
   try {
-    const res = await resolveDirectLink(props.filePath)
+    const res = await resolveDirectLink(props.filePath, { timeout: 0 })
     if (res.code === 1000) {
       linkResult.value = res.data
       return
@@ -340,23 +376,44 @@ async function buildDirectManifest() {
     '',
   ]
 
-  for (const file of folderScanResult.value.files) {
-    try {
-      const res = await resolveDirectLink(file.path)
-      const relativePath = [file.relativeDir, file.name].filter(Boolean).join('/')
+  const manifestEntries = await mapWithConcurrency(
+    folderScanResult.value.files,
+    manifestResolveConcurrency,
+    async (file) => {
+      try {
+        const res = await resolveDirectLink(file.path, { timeout: 0 })
+        return {
+          file,
+          data: res.data,
+          error: '',
+        }
+      } catch (error: any) {
+        return {
+          file,
+          data: null,
+          error: error?.message || 'resolve failed',
+        }
+      }
+    },
+  )
+
+  for (const entry of manifestEntries) {
+    if (entry.data) {
+      const relativePath = [entry.file.relativeDir, entry.file.name].filter(Boolean).join('/')
       lines.push(`[${relativePath}]`)
-      lines.push(`path=${file.path}`)
-      lines.push(`url=${res.data.direct_link}`)
-      lines.push(`proxy=${String(res.data.is_openlist_proxy)}`)
-      if (res.data.header?.trim()) {
-        lines.push(`header=${JSON.stringify(res.data.header)}`)
+      lines.push(`path=${entry.file.path}`)
+      lines.push(`url=${entry.data.direct_link}`)
+      lines.push(`proxy=${String(entry.data.is_openlist_proxy)}`)
+      if (entry.data.header?.trim()) {
+        lines.push(`header=${JSON.stringify(entry.data.header)}`)
       }
       lines.push('')
       manifestPreparedCount.value += 1
-    } catch (error: any) {
-      manifestFailedCount.value += 1
-      lines.push(`# failed path=${file.path} reason=${error?.message || 'resolve failed'}`)
+      continue
     }
+
+    manifestFailedCount.value += 1
+    lines.push(`# failed path=${entry.file.path} reason=${entry.error}`)
   }
 
   manifestText.value = lines.join('\n')
@@ -389,6 +446,8 @@ async function createSingleTask(filePath: string, dir?: string) {
   const res = await createTask({
     path: filePath,
     dir: dir || undefined,
+  }, {
+    timeout: 0,
   })
   if (res.code !== 1000) {
     throw new Error((res.msg as string) || t('download_dialog.create_failed'))
@@ -421,13 +480,29 @@ async function handleConfirm() {
       const createdIds: string[] = []
       const failures: string[] = []
 
-      for (const file of folderScanResult.value.files) {
-        const downloadDir = joinTargetDir(baseDir, rootFolder, file.relativeDir)
-        try {
-          const taskId = await createSingleTask(file.path, downloadDir)
-          if (taskId) createdIds.push(taskId)
-        } catch (error: any) {
-          failures.push(`${file.path}: ${error?.message || t('download_dialog.create_failed')}`)
+      const taskResults = await mapWithConcurrency(
+        folderScanResult.value.files,
+        taskCreateConcurrency,
+        async (file) => {
+          const downloadDir = joinTargetDir(baseDir, rootFolder, file.relativeDir)
+          try {
+            const taskId = await createSingleTask(file.path, downloadDir)
+            return { filePath: file.path, taskId, error: '' }
+          } catch (error: any) {
+            return {
+              filePath: file.path,
+              taskId: '',
+              error: error?.message || t('download_dialog.create_failed'),
+            }
+          }
+        },
+      )
+
+      for (const result of taskResults) {
+        if (result.taskId) {
+          createdIds.push(result.taskId)
+        } else if (result.error) {
+          failures.push(`${result.filePath}: ${result.error}`)
         }
       }
 

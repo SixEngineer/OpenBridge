@@ -71,6 +71,12 @@ function quotaDisplay(provider: ProviderRecord) {
   }
 }
 
+function quotaPercent(provider: ProviderRecord): number {
+  const quota = store.getEffectiveProviderQuota(provider)
+  if (!quota || quota.total <= 0) return 0
+  return Math.min((quota.used / quota.total) * 100, 100)
+}
+
 function openAddDialog() {
   editingProvider.value = null
   dialogVisible.value = true
@@ -104,7 +110,7 @@ async function handleSubmit(data: Partial<ProviderRecord>) {
       editingProvider.value = null
       await store.fetchProviders()
     } else {
-      showToast('Failed: ' + (res.msg), 'error')
+      showToast(`${t('providers.save_failed')}: ${res.msg}`, 'error')
     }
   } catch (error: any) {
     console.error('Operation failed', error)
@@ -132,7 +138,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="page">
+  <section class="page page--providers">
+    <div class="provider-stage__halo" aria-hidden="true"></div>
     <PageHeader :title="t('providers.title')" :description="t('providers.description')">
       <template #actions>
         <button v-if="store.isAdmin" class="btn btn--primary" @click="openAddDialog">
@@ -177,16 +184,40 @@ onMounted(() => {
           <p class="provider-card__section-title">{{ t('providers.local_path') }}</p>
           <p class="provider-card__text">{{ provider.account_id || t('providers.not_set') }}</p>
         </template>
-        <div v-else class="provider-card__placeholder"></div>
 
-        <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
-        <p class="provider-card__text">
-          {{ t('providers.total') }} {{ quotaDisplay(provider).total }}<br>
-          {{ t('providers.used') }} {{ quotaDisplay(provider).used }}<br>
-          {{ t('providers.available') }} {{ quotaDisplay(provider).available }}
-        </p>
+        <div class="provider-card__quota-section">
+          <div class="provider-card__quota-visual">
+            <svg viewBox="0 0 42 42" class="provider-card__quota-ring">
+              <path
+                class="provider-card__quota-ring-bg"
+                d="M21 2.5 a 18.5 18.5 0 0 0 0 37 a 18.5 18.5 0 0 0 0 -37"
+              />
+              <path
+                class="provider-card__quota-ring-fill"
+                :stroke-dasharray="`${quotaPercent(provider)} ${100 - quotaPercent(provider)}`"
+                d="M21 2.5 a 18.5 18.5 0 0 0 0 37 a 18.5 18.5 0 0 0 0 -37"
+              />
+              <text x="21" y="18.3" class="provider-card__quota-ring-percent">{{ quotaPercent(provider).toFixed(0) }}%</text>
+              <text x="21" y="24.2" class="provider-card__quota-ring-label">{{ t('providers.quota_usage') }}</text>
+            </svg>
+          </div>
+          <div class="provider-card__quota-content">
+            <p class="provider-card__section-title">{{ t('providers.quota_usage') }}</p>
+            <div class="provider-card__quota-meter">
+              <div class="provider-card__quota-fill" :style="{ width: `${quotaPercent(provider)}%` }"></div>
+            </div>
+            <p class="provider-card__quota-summary">
+              {{ t('providers.usage_summary', { used: quotaDisplay(provider).used, total: quotaDisplay(provider).total }) }}
+            </p>
+            <p class="provider-card__text">
+              {{ t('providers.total') }} {{ quotaDisplay(provider).total }}<br>
+              {{ t('providers.used') }} {{ quotaDisplay(provider).used }}<br>
+              {{ t('providers.available') }} {{ quotaDisplay(provider).available }}
+            </p>
+          </div>
+        </div>
         
-        <p class="provider-card__section-title" v-if="provider.last_error">Last Error</p>
+        <p class="provider-card__section-title" v-if="provider.last_error">{{ t('providers.last_error') }}</p>
         <p class="provider-card__text provider-card__text--error" v-if="provider.last_error">
           {{ provider.last_error }}
         </p>
@@ -208,24 +239,51 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.page--providers {
+  position: relative;
+  overflow: hidden;
+}
+
+.provider-stage__halo {
+  position: absolute;
+  inset: -80px -40px auto auto;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(59, 130, 246, 0.2), transparent 45%),
+    radial-gradient(circle at 70% 60%, rgba(16, 185, 129, 0.18), transparent 42%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.page--providers > :not(.provider-stage__halo) {
+  position: relative;
+  z-index: 1;
+}
+
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  gap: 16px;
 }
 
 .provider-card {
-  background: var(--surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 250, 249, 0.78)),
+    var(--surface);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  transition: all 0.2s;
+  transition: transform 0.26s ease, box-shadow 0.26s ease, border-color 0.26s ease;
+  animation: provider-rise 0.45s ease both;
 }
 
 .provider-card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  border-color: var(--border);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+  border-color: rgba(59, 130, 246, 0.35);
+  transform: translateY(-3px);
 }
 
 .provider-card__header {
@@ -301,12 +359,81 @@ onMounted(() => {
   color: var(--text);
 }
 
-.provider-card__text--error {
-  color: #ef4444;
+.provider-card__quota-section {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
 }
 
-.provider-card__placeholder {
-  height: 43px;
+.provider-card__quota-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-card__quota-ring {
+  width: 92px;
+  height: 92px;
+}
+
+.provider-card__quota-ring-bg {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.18);
+  stroke-width: 3.6;
+}
+
+.provider-card__quota-ring-fill {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 3.6;
+  stroke-linecap: round;
+}
+
+.provider-card__quota-ring-percent {
+  fill: var(--text);
+  font-size: 6px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.provider-card__quota-ring-label {
+  fill: var(--muted);
+  font-size: 2.7px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.provider-card__quota-content {
+  min-width: 0;
+}
+
+.provider-card__quota-meter {
+  position: relative;
+  width: 100%;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.provider-card__quota-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #2563eb);
+  transition: width 0.45s ease;
+}
+
+.provider-card__quota-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.provider-card__text--error {
+  color: #ef4444;
 }
 
 .empty-state {
@@ -338,6 +465,17 @@ onMounted(() => {
   background: #2563eb;
 }
 
+[data-theme="dark"] .provider-card {
+  background:
+    linear-gradient(180deg, rgba(23, 37, 56, 0.96), rgba(18, 29, 44, 0.94)),
+    var(--surface);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="dark"] .provider-card__quota-meter {
+  background: rgba(255, 255, 255, 0.09);
+}
+
 /* ── Toast ── */
 .toast {
   position: fixed;
@@ -367,6 +505,17 @@ onMounted(() => {
 .toast-fade-leave-active { transition: all 0.3s ease; }
 .toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
 .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+
+@keyframes provider-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 @media (max-width: 860px) {
   .provider-grid {
@@ -417,8 +566,15 @@ onMounted(() => {
     line-height: 1.35;
   }
 
-  .provider-card__placeholder {
-    display: none;
+  .provider-card__quota-section {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .provider-card__quota-ring {
+    width: 76px;
+    height: 76px;
   }
 }
 </style>

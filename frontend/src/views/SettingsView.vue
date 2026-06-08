@@ -7,7 +7,9 @@ import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import { getUserInfo, userReset } from '@/api/user'
 import type { UserInfo } from '@/api/user'
-import { getSettings, updateAria2Settings, updateOpenListSettings, updateRcloneSettings } from '@/api/settings'
+import { getSettings, updateAppSettings, updateAria2Settings, updateFileTreeSettings, updateOpenListSettings, updateRcloneSettings, updateSessionSettings } from '@/api/settings'
+import { exitApplication, restartApplication } from '@/api/system'
+import { readMotionEnabled, writeMotionEnabled } from '@/utils/uiPreferences'
 
 const store = useConsoleStore()
 const router = useRouter()
@@ -27,11 +29,23 @@ const savedAria2Url = ref('')
 const settingsLoading = ref(false)
 const settingsError = ref(false)
 const savingAria2 = ref(false)
-const aria2UrlChanged = computed(() => aria2UrlInput.value.trim() !== savedAria2Url.value)
+const aria2PathInput = ref('')
+const savedAria2Path = ref('')
+const aria2AutoStartInput = ref(false)
+const savedAria2AutoStart = ref(false)
+const aria2SettingsChanged = computed(() =>
+  aria2UrlInput.value.trim() !== savedAria2Url.value ||
+  aria2PathInput.value.trim() !== savedAria2Path.value ||
+  aria2AutoStartInput.value !== savedAria2AutoStart.value
+)
 const rclonePathInput = ref('')
 const savedRclonePath = ref('')
 const savingRclone = ref(false)
 const rclonePathChanged = computed(() => rclonePathInput.value.trim() !== savedRclonePath.value)
+const sessionDeviceLimitInput = ref('5')
+const savedSessionDeviceLimit = ref(5)
+const savingSessionDeviceLimit = ref(false)
+const sessionDeviceLimitChanged = computed(() => Number(sessionDeviceLimitInput.value) !== savedSessionDeviceLimit.value)
 
 // ── OpenList URL ──
 const olUrlInput = ref('http://127.0.0.1:5244')
@@ -42,11 +56,34 @@ const olUrlChanged = computed(() => olUrlInput.value.trim() !== savedOlUrl.value
 // ── Local session timeout ──
 const sessionTimeoutInput = ref(String(store.sessionTimeoutMinutes))
 const sessionTimeoutChanged = computed(() => Number(sessionTimeoutInput.value) !== store.sessionTimeoutMinutes)
+const motionEnabledInput = ref(readMotionEnabled())
+const savedMotionEnabled = ref(readMotionEnabled())
+const motionChanged = computed(() => motionEnabledInput.value !== savedMotionEnabled.value)
+const autoOpenBrowserInput = ref(true)
+const savedAutoOpenBrowser = ref(true)
+const savingApp = ref(false)
+const appSettingsChanged = computed(() => autoOpenBrowserInput.value !== savedAutoOpenBrowser.value)
+const fileTreeCacheSizeKBInput = ref('1024')
+const savedFileTreeCacheSizeKB = ref(1024)
+const fileTreeCacheDepthInput = ref('2')
+const savedFileTreeCacheDepth = ref(2)
+const savingFileTree = ref(false)
+const restartingApp = ref(false)
+const exitingApp = ref(false)
+const fileTreeSettingsChanged = computed(() =>
+  Number(fileTreeCacheSizeKBInput.value) !== savedFileTreeCacheSizeKB.value ||
+  Number(fileTreeCacheDepthInput.value) !== savedFileTreeCacheDepth.value
+)
 
 function saveSessionTimeout() {
   const minutes = Number(sessionTimeoutInput.value)
   store.setSessionTimeout(minutes)
   sessionTimeoutInput.value = String(store.sessionTimeoutMinutes)
+}
+
+function saveMotionPreference() {
+  writeMotionEnabled(motionEnabledInput.value)
+  savedMotionEnabled.value = motionEnabledInput.value
 }
 
 // ── User Info ──
@@ -79,11 +116,23 @@ async function fetchSettings() {
   try {
     const res = await getSettings()
     savedAria2Url.value = res.data.aria2_rpc_url || 'http://127.0.0.1:6800/jsonrpc'
+    savedAria2Path.value = res.data.aria2_path || ''
+    savedAria2AutoStart.value = Boolean(res.data.aria2_auto_start)
     savedOlUrl.value = res.data.openlist_base_url || 'http://127.0.0.1:5244'
     savedRclonePath.value = res.data.rclone_path || ''
+    savedSessionDeviceLimit.value = Math.max(1, Number(res.data.session_device_limit) || 5)
+    savedAutoOpenBrowser.value = Boolean(res.data.auto_open_browser)
+    savedFileTreeCacheSizeKB.value = Math.max(4, Number(res.data.filetree_cache_size_kb) || 1024)
+    savedFileTreeCacheDepth.value = Math.min(5, Math.max(1, Number(res.data.filetree_cache_depth) || 2))
     aria2UrlInput.value = savedAria2Url.value
+    aria2PathInput.value = savedAria2Path.value
+    aria2AutoStartInput.value = savedAria2AutoStart.value
     olUrlInput.value = savedOlUrl.value
     rclonePathInput.value = savedRclonePath.value
+    sessionDeviceLimitInput.value = String(savedSessionDeviceLimit.value)
+    autoOpenBrowserInput.value = savedAutoOpenBrowser.value
+    fileTreeCacheSizeKBInput.value = String(savedFileTreeCacheSizeKB.value)
+    fileTreeCacheDepthInput.value = String(savedFileTreeCacheDepth.value)
   } catch {
     settingsError.value = true
   } finally {
@@ -109,9 +158,17 @@ async function saveRclonePath() {
 async function saveAria2Url() {
   savingAria2.value = true
   try {
-    const res = await updateAria2Settings({ rpc_url: aria2UrlInput.value.trim() })
+    const res = await updateAria2Settings({
+      rpc_url: aria2UrlInput.value.trim(),
+      path: aria2PathInput.value.trim(),
+      auto_start: aria2AutoStartInput.value,
+    })
     savedAria2Url.value = res.data.aria2_rpc_url
+    savedAria2Path.value = res.data.aria2_path || ''
+    savedAria2AutoStart.value = Boolean(res.data.aria2_auto_start)
     aria2UrlInput.value = res.data.aria2_rpc_url
+    aria2PathInput.value = savedAria2Path.value
+    aria2AutoStartInput.value = savedAria2AutoStart.value
     settingsError.value = false
   } catch (error) {
     const message = error instanceof Error ? error.message : t('common.request_error')
@@ -135,6 +192,96 @@ async function saveOlUrl() {
     alert(message)
   } finally {
     savingOpenList.value = false
+  }
+}
+
+async function saveAppSettings() {
+  savingApp.value = true
+  try {
+    const res = await updateAppSettings({ auto_open_browser: autoOpenBrowserInput.value })
+    savedAutoOpenBrowser.value = Boolean(res.data.auto_open_browser)
+    autoOpenBrowserInput.value = savedAutoOpenBrowser.value
+    settingsError.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingApp.value = false
+  }
+}
+
+async function saveSessionDeviceLimit() {
+  savingSessionDeviceLimit.value = true
+  try {
+    const deviceLimit = Math.max(1, Math.round(Number(sessionDeviceLimitInput.value) || 0))
+    const res = await updateSessionSettings({ device_limit: deviceLimit })
+    savedSessionDeviceLimit.value = Math.max(1, Number(res.data.session_device_limit) || deviceLimit)
+    sessionDeviceLimitInput.value = String(savedSessionDeviceLimit.value)
+    settingsError.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingSessionDeviceLimit.value = false
+  }
+}
+
+async function saveFileTreeSettings() {
+  savingFileTree.value = true
+  try {
+    const cacheSizeKB = Math.max(4, Math.round(Number(fileTreeCacheSizeKBInput.value) || 0))
+    const cacheDepth = Math.min(5, Math.max(1, Math.round(Number(fileTreeCacheDepthInput.value) || 0)))
+    const res = await updateFileTreeSettings({
+      cache_size_kb: cacheSizeKB,
+      cache_depth: cacheDepth,
+    })
+    savedFileTreeCacheSizeKB.value = Math.max(4, Number(res.data.filetree_cache_size_kb) || cacheSizeKB)
+    savedFileTreeCacheDepth.value = Math.min(5, Math.max(1, Number(res.data.filetree_cache_depth) || cacheDepth))
+    fileTreeCacheSizeKBInput.value = String(savedFileTreeCacheSizeKB.value)
+    fileTreeCacheDepthInput.value = String(savedFileTreeCacheDepth.value)
+    settingsError.value = false
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    savingFileTree.value = false
+  }
+}
+
+async function handleRestartApplication() {
+  if (!window.confirm(t('settings.restart_confirm'))) {
+    return
+  }
+
+  restartingApp.value = true
+  try {
+    await restartApplication()
+    alert(t('settings.restart_requested'))
+    window.setTimeout(() => {
+      window.location.reload()
+    }, 1800)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    restartingApp.value = false
+  }
+}
+
+async function handleExitApplication() {
+  if (!window.confirm(t('settings.exit_confirm'))) {
+    return
+  }
+
+  exitingApp.value = true
+  try {
+    await exitApplication()
+    alert(t('settings.exit_requested'))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('common.request_error')
+    alert(message)
+  } finally {
+    exitingApp.value = false
   }
 }
 
@@ -175,6 +322,8 @@ function roleLabel(role: number): string {
 
 onMounted(() => {
   sessionTimeoutInput.value = String(store.sessionTimeoutMinutes)
+  motionEnabledInput.value = readMotionEnabled()
+  savedMotionEnabled.value = motionEnabledInput.value
   fetchUserInfo()
   fetchSettings()
 })
@@ -265,8 +414,37 @@ onMounted(() => {
                 placeholder="http://127.0.0.1:6800/jsonrpc"
                 @keyup.enter="saveAria2Url"
               />
-              <button class="btn btn--sm" @click="saveAria2Url" :disabled="settingsLoading || savingAria2 || !aria2UrlChanged">{{ t('settings.save') }}</button>
+              <button class="btn btn--sm" @click="saveAria2Url" :disabled="settingsLoading || savingAria2 || !aria2SettingsChanged">{{ t('settings.save') }}</button>
             </div>
+          </div>
+          <div class="field">
+            <span class="field__label">{{ t('settings.aria2_path') }}</span>
+            <div class="input-row">
+              <LocalPathInput
+                v-model="aria2PathInput"
+                placeholder="C:\\Program Files\\aria2\\aria2c.exe"
+                mode="file"
+                :title="t('settings.aria2_path')"
+                filter="Executable (*.exe)|*.exe|All files (*.*)|*.*"
+              />
+            </div>
+            <span class="field__hint">{{ t('settings.aria2_path_hint') }}</span>
+          </div>
+          <label class="toggle-row">
+            <span>
+              <span class="field__label">{{ t('settings.aria2_auto_start') }}</span>
+              <span class="field__hint">{{ t('settings.aria2_auto_start_hint') }}</span>
+            </span>
+            <input v-model="aria2AutoStartInput" type="checkbox" class="toggle-row__input" />
+          </label>
+          <div class="input-row input-row--end">
+            <button
+              class="btn btn--sm"
+              @click="saveAria2Url"
+              :disabled="settingsLoading || savingAria2 || !aria2SettingsChanged"
+            >
+              {{ t('settings.save') }}
+            </button>
           </div>
           <div class="field">
             <span class="field__label">{{ t('settings.download_dir') }}</span>
@@ -281,6 +459,12 @@ onMounted(() => {
             </div>
             <span class="field__hint">{{ t('settings.dir_hint') }}</span>
           </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3 class="card__title">{{ t('settings.other') }}</h3>
+        <div class="card__body">
           <div class="field">
             <span class="field__label">{{ t('settings.session_timeout') }}</span>
             <div class="input-row">
@@ -294,6 +478,119 @@ onMounted(() => {
               <button class="btn btn--sm" @click="saveSessionTimeout" :disabled="!sessionTimeoutChanged">{{ t('settings.save') }}</button>
             </div>
             <span class="field__hint">{{ t('settings.session_timeout_hint') }}</span>
+          </div>
+          <label class="toggle-row">
+            <span>
+              <span class="field__label">{{ t('settings.ui_motion') }}</span>
+              <span class="field__hint">{{ t('settings.ui_motion_hint') }}</span>
+            </span>
+            <input v-model="motionEnabledInput" type="checkbox" class="toggle-row__input" />
+          </label>
+          <div class="input-row input-row--end">
+            <button
+              class="btn btn--sm"
+              @click="saveMotionPreference"
+              :disabled="!motionChanged"
+            >
+              {{ t('settings.save') }}
+            </button>
+          </div>
+          <label v-if="store.isAdmin" class="toggle-row">
+            <span>
+              <span class="field__label">{{ t('settings.auto_open_browser') }}</span>
+              <span class="field__hint">{{ t('settings.auto_open_browser_hint') }}</span>
+            </span>
+            <input v-model="autoOpenBrowserInput" type="checkbox" class="toggle-row__input" />
+          </label>
+          <div v-if="store.isAdmin" class="input-row input-row--end">
+            <button
+              class="btn btn--sm"
+              @click="saveAppSettings"
+              :disabled="settingsLoading || savingApp || !appSettingsChanged"
+            >
+              {{ t('settings.save') }}
+            </button>
+          </div>
+          <div v-if="store.isAdmin" class="field">
+            <span class="field__label">{{ t('settings.session_device_limit') }}</span>
+            <div class="input-row">
+              <input
+                v-model="sessionDeviceLimitInput"
+                class="config-input"
+                inputmode="numeric"
+                placeholder="5"
+                @keyup.enter="saveSessionDeviceLimit"
+              />
+              <button
+                class="btn btn--sm"
+                @click="saveSessionDeviceLimit"
+                :disabled="settingsLoading || savingSessionDeviceLimit || !sessionDeviceLimitChanged"
+              >
+                {{ t('settings.save') }}
+              </button>
+            </div>
+            <span class="field__hint">{{ t('settings.session_device_limit_hint') }}</span>
+          </div>
+          <div v-if="store.isAdmin" class="field">
+            <span class="field__label">{{ t('settings.service_control') }}</span>
+            <span class="field__hint">{{ t('settings.service_control_hint') }}</span>
+            <div class="input-row">
+              <button
+                class="btn btn--sm"
+                @click="handleRestartApplication"
+                :disabled="restartingApp || exitingApp"
+              >
+                {{ restartingApp ? t('settings.restarting') : t('settings.restart_button') }}
+              </button>
+              <button
+                class="btn btn--sm btn--danger"
+                @click="handleExitApplication"
+                :disabled="restartingApp || exitingApp"
+              >
+                {{ exitingApp ? t('settings.exiting') : t('settings.exit_button') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3 class="card__title">{{ t('settings.filetree') }}</h3>
+        <div class="card__body">
+          <div class="field">
+            <span class="field__label">{{ t('settings.filetree_cache_size_kb') }}</span>
+            <div class="input-row">
+              <input
+                v-model="fileTreeCacheSizeKBInput"
+                class="config-input"
+                inputmode="numeric"
+                placeholder="1024"
+                @keyup.enter="saveFileTreeSettings"
+              />
+            </div>
+            <span class="field__hint">{{ t('settings.filetree_cache_size_hint') }}</span>
+          </div>
+          <div class="field">
+            <span class="field__label">{{ t('settings.filetree_cache_depth') }}</span>
+            <div class="input-row">
+              <input
+                v-model="fileTreeCacheDepthInput"
+                class="config-input"
+                inputmode="numeric"
+                placeholder="2"
+                @keyup.enter="saveFileTreeSettings"
+              />
+            </div>
+            <span class="field__hint">{{ t('settings.filetree_cache_depth_hint') }}</span>
+          </div>
+          <div class="input-row input-row--end">
+            <button
+              class="btn btn--sm"
+              @click="saveFileTreeSettings"
+              :disabled="settingsLoading || savingFileTree || !fileTreeSettingsChanged"
+            >
+              {{ t('settings.save') }}
+            </button>
           </div>
         </div>
       </article>
@@ -453,6 +750,24 @@ onMounted(() => {
   align-items: center;
 }
 
+.input-row--end {
+  justify-content: flex-end;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toggle-row__input {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
 .config-input {
   flex: 1;
   padding: 8px 12px;
@@ -602,8 +917,16 @@ onMounted(() => {
     align-items: stretch;
   }
 
+  .input-row--end {
+    align-items: stretch;
+  }
+
   .config-input {
     width: 100%;
+  }
+
+  .toggle-row {
+    align-items: flex-start;
   }
 
   .user-info__row {

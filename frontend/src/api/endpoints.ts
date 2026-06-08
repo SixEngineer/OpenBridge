@@ -32,6 +32,8 @@ const endpoints = {
   // ── System ──
   systemPickPath: '/system/pick-path',
   systemMetrics: '/system/metrics',
+  systemRestart: '/system/restart',
+  systemExit: '/system/exit',
 
   // ── Download / Task ──
   downloadTasks: '/download/tasks',
@@ -45,9 +47,12 @@ const endpoints = {
 
   // ── Settings ──
   settings: '/settings',
+  settingsApp: '/settings/app',
   settingsOpenList: '/settings/openlist',
   settingsAria2: '/settings/aria2',
   settingsRclone: '/settings/rclone',
+  settingsSession: '/settings/session',
+  settingsFileTree: '/settings/filetree',
 
   // ── User ──
   userLogin: '/user/login',
@@ -60,6 +65,7 @@ const endpoints = {
   rcloneProfile: (id: number) => `/rclone/profiles/${id}` as const,
   rcloneProfileApply: (id: number) => `/rclone/profiles/${id}/apply` as const,
   rcloneProfileMount: (id: number) => `/rclone/profiles/${id}/mount` as const,
+  rcloneProfileUnmount: (id: number) => `/rclone/profiles/${id}/unmount` as const,
 } as const
 
 export default endpoints

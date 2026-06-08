@@ -31,6 +31,27 @@ const selectedProvider = computed(() => {
   return store.providers.find(p => p.id === selectedProviderId.value) ?? null
 })
 
+const selectedProviderQuotaSummary = computed(() => {
+  const provider = selectedProvider.value
+  if (!provider) return null
+  const quota = store.getEffectiveProviderQuota(provider)
+  if (!quota || quota.total <= 0) return null
+
+  const convert = (value: number) => {
+    if (quota.mode === 'virtual') {
+      return formatProviderQuota(value)
+    }
+    return displayProviderQuota(value, quota.providerType)
+  }
+
+  return {
+    total: convert(quota.total),
+    used: convert(quota.used),
+    available: convert(quota.available),
+    percent: Math.min((quota.used / quota.total) * 100, 100),
+  }
+})
+
 function selectProvider(id: number) {
   selectedProviderId.value = id
   providerDropdownOpen.value = false
@@ -275,13 +296,21 @@ function formatQuotaMB(mb: number): string {
   return formatBytes(mb * 1024 * 1024)
 }
 
+function formatProviderQuota(mb: number): string {
+  return formatBytes(mb * 1024 * 1024)
+}
+
+function displayProviderQuota(mb: number, providerType: string): string {
+  const scale = providerType === 'mock' ? 1024 : 1
+  return formatProviderQuota(mb * scale)
+}
+
 function displayQuotaMB(mb: number, mountMode?: string | null): string {
   // 虚拟模式值就是 MB，不应用 mock 缩放
   if (mountMode === 'virtual') {
     return formatQuotaMB(mb)
   }
-  const scale = selectedProvider.value?.provider_type === 'mock' ? 1024 : 1
-  return formatQuotaMB(mb * scale)
+  return displayProviderQuota(mb, selectedProvider.value?.provider_type || '')
 }
 
 function formatTime(t: string | null | undefined): string {
@@ -329,7 +358,8 @@ watch(selectedProviderId, async () => {
 </script>
 
 <template>
-  <section class="page">
+  <section class="page page--quota">
+    <div class="quota-stage__grid" aria-hidden="true"></div>
     <PageHeader
       :title="t('quota.title')"
       :description="t('quota.description')"
@@ -389,6 +419,43 @@ watch(selectedProviderId, async () => {
         >
           {{ showCreateForm ? t('quota.cancel') : t('quota.create_new_mount') }}
         </button>
+      </div>
+    </div>
+
+    <div v-if="selectedProvider && selectedProviderQuotaSummary" class="provider-summary-card">
+      <div class="provider-summary-card__body">
+        <div class="provider-summary-card__visual">
+          <svg viewBox="0 0 42 42" class="provider-summary-card__ring">
+            <path
+              class="provider-summary-card__ring-bg"
+              d="M21 2.5 a 18.5 18.5 0 0 0 0 37 a 18.5 18.5 0 0 0 0 -37"
+            />
+            <path
+              class="provider-summary-card__ring-fill"
+              :stroke-dasharray="`${selectedProviderQuotaSummary.percent} ${100 - selectedProviderQuotaSummary.percent}`"
+              d="M21 2.5 a 18.5 18.5 0 0 0 0 37 a 18.5 18.5 0 0 0 0 -37"
+            />
+            <text x="21" y="18.1" class="provider-summary-card__ring-percent">{{ selectedProviderQuotaSummary.percent.toFixed(1) }}%</text>
+            <text x="21" y="24.2" class="provider-summary-card__ring-label">{{ t('quota.total') }}</text>
+          </svg>
+        </div>
+        <div class="provider-summary-card__content">
+          <div class="provider-summary-card__header">
+            <div>
+              <p class="provider-summary-card__eyebrow">{{ selectedProvider.name }}</p>
+              <h3>{{ t('quota.provider_total_usage') }}</h3>
+            </div>
+            <strong>{{ selectedProviderQuotaSummary.total }}</strong>
+          </div>
+          <div class="provider-summary-card__bar">
+            <div class="provider-summary-card__fill" :style="{ width: `${selectedProviderQuotaSummary.percent}%` }"></div>
+          </div>
+          <div class="provider-summary-card__stats">
+            <span>{{ t('quota.used') }} {{ selectedProviderQuotaSummary.used }}</span>
+            <span>{{ t('quota.available') }} {{ selectedProviderQuotaSummary.available }}</span>
+            <span>{{ t('quota.total') }} {{ selectedProviderQuotaSummary.total }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -614,15 +681,171 @@ watch(selectedProviderId, async () => {
 </template>
 
 <style scoped>
+.page--quota {
+  position: relative;
+  overflow: hidden;
+}
+
+.quota-stage__grid {
+  position: absolute;
+  inset: 110px -140px auto auto;
+  width: 340px;
+  height: 340px;
+  pointer-events: none;
+  opacity: 0.6;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.95), transparent 72%);
+  transform: rotate(10deg);
+}
+
+.page--quota > :not(.quota-stage__grid) {
+  position: relative;
+  z-index: 1;
+}
+
 .quota-controls {
   display: flex;
   align-items: center;
   gap: 20px;
-  margin-bottom: 30px;
-  padding: 20px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
   background: var(--surface);
   border-radius: 12px;
   border: 1px solid var(--border);
+}
+
+.provider-summary-card {
+  margin-bottom: 12px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 249, 255, 0.85)),
+    var(--surface);
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.08);
+  animation: quota-rise 0.45s ease both;
+}
+
+.provider-summary-card__body {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.provider-summary-card__visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-summary-card__ring {
+  width: 132px;
+  height: 132px;
+}
+
+.provider-summary-card__ring-bg {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.18);
+  stroke-width: 3.2;
+}
+
+.provider-summary-card__ring-fill {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.provider-summary-card__ring-percent {
+  fill: var(--text);
+  font-size: 5.5px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.provider-summary-card__ring-label {
+  fill: var(--muted);
+  font-size: 2.7px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.provider-summary-card__content {
+  min-width: 0;
+}
+
+.provider-summary-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.provider-summary-card__header h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.provider-summary-card__header strong {
+  font-size: 24px;
+  color: var(--text);
+  line-height: 1;
+  text-align: right;
+}
+
+.provider-summary-card__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.provider-summary-card__bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.provider-summary-card__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #2563eb);
+  transition: width 0.45s ease;
+}
+
+.provider-summary-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+[data-theme="dark"] .quota-controls,
+[data-theme="dark"] .mode-section,
+[data-theme="dark"] .mount-card,
+[data-theme="dark"] .provider-summary-card,
+[data-theme="dark"] .dropdown-panel,
+[data-theme="dark"] .dialog {
+  background:
+    linear-gradient(180deg, rgba(23, 37, 56, 0.96), rgba(18, 29, 44, 0.94)),
+    var(--surface);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+[data-theme="dark"] .provider-summary-card__bar,
+[data-theme="dark"] .quota-progress,
+[data-theme="dark"] .dropdown-trigger:hover:not(.dropdown-trigger--disabled) {
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .provider-dropdown {
@@ -869,10 +1092,14 @@ watch(selectedProviderId, async () => {
 }
 
 .mount-card {
-  background: var(--surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.8)),
+    var(--surface);
   border-radius: 12px;
   padding: 24px;
   border: 1px solid var(--border);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  animation: quota-rise 0.45s ease both;
 }
 
 .mount-card--stale {
@@ -997,9 +1224,9 @@ watch(selectedProviderId, async () => {
 
 .quota-progress__bar {
   height: 100%;
-  background: #3b82f6;
+  background: linear-gradient(90deg, #0f766e, #2563eb);
   border-radius: 4px;
-  transition: width 0.3s;
+  transition: width 0.45s ease;
 }
 
 .quota-card__time {
@@ -1225,6 +1452,17 @@ watch(selectedProviderId, async () => {
   to { transform: rotate(360deg); }
 }
 
+@keyframes quota-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── Offline banner ── */
 .offline-banner {
   padding: 12px 20px;
@@ -1284,6 +1522,13 @@ watch(selectedProviderId, async () => {
    Mobile: responsive QuotaView
    ════════════════════════════════════════════ */
 @media (max-width: 860px) {
+  .quota-stage__grid {
+    width: 220px;
+    height: 220px;
+    right: -100px;
+    top: 150px;
+  }
+
   .quota-controls {
     flex-direction: column;
     align-items: stretch;
@@ -1298,6 +1543,28 @@ watch(selectedProviderId, async () => {
 
   .button-group {
     margin-left: 0;
+  }
+
+  .provider-summary-card {
+    padding: 16px;
+  }
+
+  .provider-summary-card__body {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .provider-summary-card__ring {
+    width: 118px;
+    height: 118px;
+  }
+
+  .provider-summary-card__header {
+    align-items: center;
+  }
+
+  .provider-summary-card__header h3 {
+    font-size: 16px;
   }
 
   .button-group .btn {

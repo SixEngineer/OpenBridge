@@ -45,3 +45,13 @@ func (h *SystemHandler) GetSystemMetrics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
 }
+
+func (h *SystemHandler) RestartApplication(c *gin.Context) {
+	result := h.systemUseCase.RestartApplication()
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}
+
+func (h *SystemHandler) ExitApplication(c *gin.Context) {
+	result := h.systemUseCase.ExitApplication()
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}

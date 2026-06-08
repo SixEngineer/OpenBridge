@@ -111,3 +111,18 @@ func (h *RcloneHandler) MountProfile(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: profile})
 }
+
+func (h *RcloneHandler) UnmountProfile(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+
+	profile, err := h.usecase.StopMount(uint(id))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: profile})
+}

@@ -26,3 +26,7 @@ export function applyRcloneProfile(id: number): Promise<ApiResponse<RcloneProfil
 export function mountRcloneProfile(id: number): Promise<ApiResponse<RcloneProfile>> {
   return request.post(endpoints.rcloneProfileMount(id))
 }
+
+export function unmountRcloneProfile(id: number): Promise<ApiResponse<RcloneProfile>> {
+  return request.post(endpoints.rcloneProfileUnmount(id))
+}

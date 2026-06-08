@@ -17,8 +17,16 @@ export function getFiles(params: {
   path: string
   page?: number
   per_page?: number
+}, options?: {
+  timeout?: number
 }): Promise<ApiResponse<any>> {
-  return request.get(endpoints.storageFiles, { params })
+  return request.get(endpoints.storageFiles, {
+    params: {
+      ...params,
+      _t: Date.now(),
+    },
+    timeout: options?.timeout,
+  })
 }
 
 // 获取文件信息

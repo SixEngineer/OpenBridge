@@ -1,5 +1,6 @@
 export interface LocalSession {
   username: string
+  deviceId: string
   issuedAt: number
   lastActiveAt: number
   timeoutMinutes: number
@@ -9,6 +10,7 @@ export interface LocalSession {
 }
 
 export const AUTH_KEY = 'openbridge_auth'
+export const DEVICE_ID_KEY = 'openbridge_device_id'
 export const SESSION_TIMEOUT_KEY = 'openbridge_session_timeout_minutes'
 export const LOGOUT_REASON_KEY = 'openbridge_logout_reason'
 export const DEFAULT_SESSION_TIMEOUT_MINUTES = 120
@@ -26,6 +28,7 @@ export function readLocalSession(): LocalSession | null {
     if (!raw) return null
 
     const parsed = JSON.parse(raw) as Partial<LocalSession>
+    const deviceId = typeof parsed.deviceId === 'string' ? parsed.deviceId : ensureDeviceId()
     if (
       typeof parsed.username !== 'string' ||
       typeof parsed.issuedAt !== 'number' ||
@@ -40,6 +43,7 @@ export function readLocalSession(): LocalSession | null {
 
     return {
       username: parsed.username,
+      deviceId,
       issuedAt: parsed.issuedAt,
       lastActiveAt: parsed.lastActiveAt,
       timeoutMinutes: normalizeSessionTimeoutMinutes(parsed.timeoutMinutes),
@@ -58,6 +62,15 @@ export function writeLocalSession(session: LocalSession) {
 
 export function clearLocalSession() {
   localStorage.removeItem(AUTH_KEY)
+}
+
+export function ensureDeviceId(): string {
+  const existing = localStorage.getItem(DEVICE_ID_KEY)
+  if (existing) return existing
+
+  const generated = createDeviceId()
+  localStorage.setItem(DEVICE_ID_KEY, generated)
+  return generated
 }
 
 export function readSessionTimeoutMinutes(): number {
@@ -88,4 +101,12 @@ export function readLogoutReason(): string {
 
 export function clearLogoutReason() {
   localStorage.removeItem(LOGOUT_REASON_KEY)
+}
+
+function createDeviceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `ob-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }

@@ -11,17 +11,35 @@ import (
 	"net/http"
 	"openbridge/backend/internal/config"
 	"openbridge/backend/internal/domain/entity"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
+)
+
+const (
+	DeviceIDHeader       = "X-OpenBridge-Device-ID"
+	legacyDeviceID       = "legacy-browser"
+	deviceSessionMaxIdle = 30 * 24 * time.Hour
 )
 
 type UserUseCase struct {
 	config            *config.Config
 	db                *gorm.DB
 	backendInstanceID string
+	sessionMu         sync.RWMutex
+	sessions          map[string]*deviceSession
+}
+
+type deviceSession struct {
+	DeviceID        string
+	Username        string
+	Role            int
+	Token           string
+	IssuedAt        int64
+	LastSeenAt      int64
+	OpenListBaseURL string
 }
 
 func NewUserUseCase(config *config.Config, db *gorm.DB) *UserUseCase {
@@ -29,50 +47,80 @@ func NewUserUseCase(config *config.Config, db *gorm.DB) *UserUseCase {
 		config:            config,
 		db:                db,
 		backendInstanceID: newBackendInstanceID(),
+		sessions:          make(map[string]*deviceSession),
 	}
 }
 
-func (uc *UserUseCase) Login(username, password string) (string, error) {
+func (uc *UserUseCase) Login(username, password, deviceID string) (string, error) {
+	baseURL := normalizeSessionBaseURL(uc.config.OpenList.BaseURL)
+	if baseURL == "" {
+		return "", errors.New("openlist base url is empty")
+	}
 
-	// HTTP 客户端配置，设置超时时间为10秒
+	token, err := uc.loginOpenList(baseURL, username, password)
+	if err != nil {
+		return "", err
+	}
+
+	userInfo, err := uc.fetchUserInfoByToken(baseURL, token)
+	if err != nil {
+		return "", err
+	}
+
+	normalizedDeviceID := normalizeDeviceID(deviceID)
+	now := time.Now().UnixMilli()
+	limit := uc.getSessionDeviceLimit()
+
+	uc.sessionMu.Lock()
+	defer uc.sessionMu.Unlock()
+
+	uc.pruneSessionsLocked(baseURL, now)
+	if uc.countUserSessionsLocked(userInfo.Username, baseURL, normalizedDeviceID) >= limit {
+		return "", fmt.Errorf("device_limit_reached: at most %d devices can stay logged in at the same time", limit)
+	}
+
+	uc.sessions[normalizedDeviceID] = &deviceSession{
+		DeviceID:        normalizedDeviceID,
+		Username:        userInfo.Username,
+		Role:            userInfo.Role,
+		Token:           token,
+		IssuedAt:        now,
+		LastSeenAt:      now,
+		OpenListBaseURL: baseURL,
+	}
+
+	// 保留全局 token，兼容当前仍依赖配置 token 的后端逻辑。
+	uc.config.OpenList.Token = token
+
+	return token, nil
+}
+
+func (uc *UserUseCase) loginOpenList(baseURL, username, password string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-
-	// 构造登录请求的payload，包含用户名和密码
 	payload := map[string]string{
 		"username": username,
 		"password": password,
 	}
 
-	// 将payload转换为JSON格式
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	// 创建一个新的HTTP POST请求，目标URL为OpenList的登录接口，并将JSON数据作为请求体
-	req, err := http.NewRequest("POST", normalizeSessionBaseURL(uc.config.OpenList.BaseURL)+"/api/auth/login", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", baseURL+"/api/auth/login", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
 
-	// 设置请求头，指定内容类型为JSON，并设置User-Agent
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "OpenBridge/1.0")
 
-	// 发送HTTP请求并获取响应
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	// 解析响应体，提取登录结果
-	// {
-	// "code": 200,
-	// "message": "success",
-	// "data": {
-	//     "token": "xxxx"
-	// }
 	var result struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -85,14 +133,11 @@ func (uc *UserUseCase) Login(username, password string) (string, error) {
 		return "", err
 	}
 
-	if result.Code != 200 {
+	if result.Code != http.StatusOK {
 		return "", fmt.Errorf("login failed with message: %s", result.Message)
 	}
 
-	// 将登录成功后返回的Token保存到配置中，以便后续请求使用
-	uc.config.OpenList.Token = result.Data.Token
-
-	return result.Data.Token, nil
+	return strings.TrimSpace(result.Data.Token), nil
 }
 
 type ResetScope string
@@ -114,11 +159,9 @@ func (uc *UserUseCase) Reset(scope ResetScope) error {
 }
 
 func (uc *UserUseCase) ClearAllTables(db *gorm.DB) error {
-	// 获取所有表名
 	var tables []string
 	db.Raw("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&tables)
 
-	// 事务清空
 	return db.Transaction(func(tx *gorm.DB) error {
 		tx.Exec("PRAGMA foreign_keys = OFF")
 		for _, table := range tables {
@@ -190,10 +233,21 @@ type SessionStatus struct {
 	BackendInstanceID string `json:"backend_instance_id"`
 	OpenListBaseURL   string `json:"openlist_base_url"`
 	Fingerprint       string `json:"fingerprint"`
+	DeviceID          string `json:"device_id"`
+	DeviceLimit       int    `json:"device_limit"`
+	ActiveDeviceCount int    `json:"active_device_count"`
 	Username          string `json:"username,omitempty"`
 	Role              int    `json:"role,omitempty"`
 	CheckedAt         int64  `json:"checked_at"`
 	Reason            string `json:"reason,omitempty"`
+}
+
+type OpenListAccess struct {
+	BaseURL  string
+	Token    string
+	Username string
+	BasePath string
+	Role     int
 }
 
 type UserInfo struct {
@@ -208,32 +262,76 @@ type UserInfo struct {
 	OTP        bool   `json:"otp"`
 }
 
-// 获取用户数据
-func (uc *UserUseCase) GetUserInfo() (UserInfo, error) {
+func (uc *UserUseCase) GetUserInfo(deviceID string) (UserInfo, error) {
 	baseURL := normalizeSessionBaseURL(uc.config.OpenList.BaseURL)
-	token := strings.TrimSpace(uc.config.OpenList.Token)
 	if baseURL == "" {
 		return UserInfo{}, fmt.Errorf("openlist base url is empty")
 	}
+
+	session := uc.getSession(deviceID)
+	if session == nil {
+		return UserInfo{}, fmt.Errorf("device session missing")
+	}
+	if session.OpenListBaseURL != baseURL {
+		uc.removeSession(deviceID)
+		return UserInfo{}, fmt.Errorf("openlist source changed")
+	}
+
+	token := uc.getTokenForDevice(deviceID)
 	if token == "" {
 		return UserInfo{}, fmt.Errorf("openlist token is empty")
 	}
 
-	// HTTP 配置，设置超时为10秒
-	client := &http.Client{Timeout: 10 * time.Second}
+	userInfo, err := uc.fetchUserInfoByToken(baseURL, token)
+	if err != nil {
+		uc.removeSession(normalizeDeviceID(deviceID))
+		return UserInfo{}, err
+	}
 
-	// 创建一个新的HTTP GET请求，目标URL为OpenList的用户信息接口
+	uc.touchSession(normalizeDeviceID(deviceID), userInfo, token, baseURL)
+	return userInfo, nil
+}
+
+func (uc *UserUseCase) GetOpenListAccess(deviceID string) (OpenListAccess, error) {
+	userInfo, err := uc.GetUserInfo(deviceID)
+	if err != nil {
+		return OpenListAccess{}, err
+	}
+
+	session := uc.getSession(deviceID)
+	if session == nil {
+		return OpenListAccess{}, fmt.Errorf("device session missing")
+	}
+
+	token := strings.TrimSpace(session.Token)
+	if token == "" {
+		return OpenListAccess{}, fmt.Errorf("openlist token is empty")
+	}
+
+	return OpenListAccess{
+		BaseURL:  normalizeSessionBaseURL(uc.config.OpenList.BaseURL),
+		Token:    token,
+		Username: userInfo.Username,
+		BasePath: userInfo.BasePath,
+		Role:     userInfo.Role,
+	}, nil
+}
+
+func (uc *UserUseCase) fetchUserInfoByToken(baseURL, token string) (UserInfo, error) {
+	if strings.TrimSpace(token) == "" {
+		return UserInfo{}, fmt.Errorf("openlist token is empty")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", baseURL+"/api/me", nil)
 	if err != nil {
 		return UserInfo{}, err
 	}
 
-	// 设置请求头，指定内容类型为JSON，并设置User-Agent和Token
 	req.Header.Set("User-Agent", "OpenBridge/1.0")
 	req.Header.Set("Authorization", token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// 发送HTTP请求并获取响应
 	resp, err := client.Do(req)
 	if err != nil {
 		return UserInfo{}, err
@@ -244,7 +342,6 @@ func (uc *UserUseCase) GetUserInfo() (UserInfo, error) {
 		return UserInfo{}, fmt.Errorf("openlist /api/me returned status %d", resp.StatusCode)
 	}
 
-	// 解析响应体，提取用户信息
 	var result Response
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return UserInfo{}, err
@@ -257,48 +354,152 @@ func (uc *UserUseCase) GetUserInfo() (UserInfo, error) {
 	return result.Data, nil
 }
 
-func (uc *UserUseCase) GetSessionStatus() SessionStatus {
+func (uc *UserUseCase) GetSessionStatus(deviceID string) SessionStatus {
 	baseURL := normalizeSessionBaseURL(uc.config.OpenList.BaseURL)
+	normalizedDeviceID := normalizeDeviceID(deviceID)
 	status := SessionStatus{
 		BackendInstanceID: uc.backendInstanceID,
 		OpenListBaseURL:   baseURL,
+		DeviceID:          normalizedDeviceID,
+		DeviceLimit:       uc.getSessionDeviceLimit(),
 		CheckedAt:         time.Now().UnixMilli(),
 	}
 
 	switch {
 	case baseURL == "":
 		status.Reason = "openlist_base_url_missing"
-	case strings.TrimSpace(uc.config.OpenList.Token) == "":
-		status.Reason = "openlist_token_missing"
+	case uc.getSession(normalizedDeviceID) == nil:
+		status.Reason = "device_session_missing"
+	case uc.getSession(normalizedDeviceID).OpenListBaseURL != baseURL:
+		uc.removeSession(normalizedDeviceID)
+		status.Reason = "source_changed"
 	default:
-		userInfo, err := uc.GetUserInfo()
+		userInfo, err := uc.GetUserInfo(normalizedDeviceID)
 		if err != nil {
-			status.Reason = "openlist_auth_invalid"
+			if strings.Contains(err.Error(), "source changed") {
+				status.Reason = "source_changed"
+			} else {
+				status.Reason = "openlist_auth_invalid"
+			}
 			break
 		}
 		status.Authenticated = true
 		status.Username = userInfo.Username
 		status.Role = userInfo.Role
+		status.ActiveDeviceCount = uc.countUserSessions(userInfo.Username, baseURL)
 	}
 
-	authState := "unauthenticated"
-	if status.Authenticated {
-		authState = "authenticated"
-	}
 	status.Fingerprint = buildSessionFingerprint(
 		status.BackendInstanceID,
 		status.OpenListBaseURL,
-		authState,
+		status.DeviceID,
 		status.Username,
-		strconv.Itoa(status.Role),
-		status.Reason,
 	)
 
 	return status
 }
 
+func (uc *UserUseCase) getTokenForDevice(deviceID string) string {
+	if session := uc.getSession(deviceID); session != nil {
+		return strings.TrimSpace(session.Token)
+	}
+	return ""
+}
+
+func (uc *UserUseCase) touchSession(deviceID string, userInfo UserInfo, token, baseURL string) {
+	normalizedDeviceID := normalizeDeviceID(deviceID)
+	now := time.Now().UnixMilli()
+
+	uc.sessionMu.Lock()
+	defer uc.sessionMu.Unlock()
+
+	session := uc.sessions[normalizedDeviceID]
+	if session == nil {
+		uc.sessions[normalizedDeviceID] = &deviceSession{
+			DeviceID:        normalizedDeviceID,
+			Username:        userInfo.Username,
+			Role:            userInfo.Role,
+			Token:           token,
+			IssuedAt:        now,
+			LastSeenAt:      now,
+			OpenListBaseURL: baseURL,
+		}
+		return
+	}
+
+	session.Username = userInfo.Username
+	session.Role = userInfo.Role
+	session.Token = token
+	session.LastSeenAt = now
+	session.OpenListBaseURL = baseURL
+}
+
+func (uc *UserUseCase) removeSession(deviceID string) {
+	normalizedDeviceID := normalizeDeviceID(deviceID)
+	uc.sessionMu.Lock()
+	defer uc.sessionMu.Unlock()
+	delete(uc.sessions, normalizedDeviceID)
+}
+
+func (uc *UserUseCase) getSession(deviceID string) *deviceSession {
+	normalizedDeviceID := normalizeDeviceID(deviceID)
+	uc.sessionMu.RLock()
+	defer uc.sessionMu.RUnlock()
+	return uc.sessions[normalizedDeviceID]
+}
+
+func (uc *UserUseCase) countUserSessions(username, baseURL string) int {
+	uc.sessionMu.RLock()
+	defer uc.sessionMu.RUnlock()
+	return uc.countUserSessionsLocked(username, baseURL, "")
+}
+
+func (uc *UserUseCase) countUserSessionsLocked(username, baseURL, excludeDeviceID string) int {
+	count := 0
+	for deviceID, session := range uc.sessions {
+		if excludeDeviceID != "" && deviceID == excludeDeviceID {
+			continue
+		}
+		if session.Username == username && session.OpenListBaseURL == baseURL {
+			count++
+		}
+	}
+	return count
+}
+
+func (uc *UserUseCase) pruneSessionsLocked(baseURL string, now int64) {
+	maxIdleMillis := deviceSessionMaxIdle.Milliseconds()
+	for deviceID, session := range uc.sessions {
+		switch {
+		case session == nil:
+			delete(uc.sessions, deviceID)
+		case session.OpenListBaseURL != baseURL:
+			delete(uc.sessions, deviceID)
+		case strings.TrimSpace(session.Token) == "":
+			delete(uc.sessions, deviceID)
+		case now-session.LastSeenAt > maxIdleMillis:
+			delete(uc.sessions, deviceID)
+		}
+	}
+}
+
+func (uc *UserUseCase) getSessionDeviceLimit() int {
+	if uc.config.Auth.SessionDeviceLimit <= 0 {
+		return 5
+	}
+	return uc.config.Auth.SessionDeviceLimit
+}
+
 func normalizeSessionBaseURL(value string) string {
 	return strings.TrimRight(strings.TrimSpace(value), "/")
+}
+
+func normalizeDeviceID(value string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return legacyDeviceID
+	}
+	return normalized
 }
 
 func newBackendInstanceID() string {
