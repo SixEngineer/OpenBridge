@@ -17,6 +17,12 @@ logs/
 node_modules/
 dist/
 
+# Local generated data
+.VSCodeCounter/
+release/
+backend/data/
+data/
+
 # OS
 .DS_Store
 Thumbs.db
