@@ -6,12 +6,29 @@ import (
 	"openbridge/backend/internal/tool"
 	"openbridge/backend/internal/usecase"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 type StorageHandler struct {
 	storageUseCase *usecase.StorageUseCase
+}
+
+type StorageNamesRequest struct {
+	Dir   string   `json:"dir"`
+	Names []string `json:"names"`
+}
+
+type StorageRenameRequest struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+}
+
+type StorageTransferRequest struct {
+	SrcDir string   `json:"src_dir"`
+	DstDir string   `json:"dst_dir"`
+	Names  []string `json:"names"`
 }
 
 func NewStorageHandler(storageUseCase *usecase.StorageUseCase) *StorageHandler {
@@ -99,4 +116,64 @@ func (h *StorageHandler) GetFileInfo(c *gin.Context) {
 	}
 	// 返回获取文件信息成功的结果
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: fileInfo})
+}
+
+func (h *StorageHandler) RemoveFiles(c *gin.Context) {
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+	var req StorageNamesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+	result, err := h.storageUseCase.RemoveFilesForDevice(deviceID, req.Dir, req.Names)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}
+
+func (h *StorageHandler) RenameFile(c *gin.Context) {
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+	var req StorageRenameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+	result, err := h.storageUseCase.RenameFileForDevice(deviceID, strings.TrimSpace(req.Path), strings.TrimSpace(req.Name))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}
+
+func (h *StorageHandler) CopyFiles(c *gin.Context) {
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+	var req StorageTransferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+	result, err := h.storageUseCase.CopyFilesForDevice(deviceID, req.SrcDir, req.DstDir, req.Names)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}
+
+func (h *StorageHandler) MoveFiles(c *gin.Context) {
+	deviceID := c.GetHeader(usecase.DeviceIDHeader)
+	var req StorageTransferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+	result, err := h.storageUseCase.MoveFilesForDevice(deviceID, req.SrcDir, req.DstDir, req.Names)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeParameterInvalid, Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
 }

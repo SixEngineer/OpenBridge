@@ -5,12 +5,13 @@ import LocalPathInput from '@/components/common/LocalPathInput.vue'
 import OpenListPathPickerDialog from '@/components/common/OpenListPathPickerDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
-import { getTaskDetail, retryTask, openFile, openFileLocation } from '@/api/task'
+import { deleteTaskFile, getTaskDetail, retryTask, openFile, openFileLocation, stopTask, stopTasks } from '@/api/task'
 import type { DownloadTask } from '@/types/download'
 
 const { t, locale } = useI18n()
 
 const store = useConsoleStore()
+const TASK_REFRESH_INTERVAL_MS = 1000
 
 // ── Create task ──
 const sourcePath = ref('')
@@ -33,6 +34,8 @@ async function handleCreate() {
     } else {
       sourcePath.value = ''
       targetDir.value = ''
+      await fetchAllTasks()
+      if (hasActiveTasks.value) startAutoRefresh()
     }
   } catch (e: any) {
     createError.value = e?.message || t('common.request_error')
@@ -106,10 +109,10 @@ function sortIndicator(field: string): string {
 }
 
 // Active statuses (need continuous refresh)
-const activeStatuses = ['waiting', 'active']
+const activeStatuses = ['waiting', 'active', 'paused']
 
 const hasActiveTasks = computed(() =>
-  tasks.value.some(t => activeStatuses.includes(t.Status))
+  tasks.value.some(t => activeStatuses.includes(normalizeStatus(t.Status)))
 )
 
 // Count per status
@@ -123,32 +126,36 @@ const statusCounts = computed(() => {
 })
 
 async function fetchAllTasks() {
+  if (taskRefreshInFlight) return
   const ids = store.downloadTaskIds
   if (ids.length === 0) {
     tasks.value = []
     return
   }
+  taskRefreshInFlight = true
   listLoading.value = true
   listError.value = ''
-  const results: DownloadTask[] = []
-  const staleIds: string[] = []
-  for (const id of ids) {
-    try {
-      const res = await getTaskDetail(id)
-      if (res.code === 1000) {
-        results.push(res.data)
+  try {
+    const staleIds: string[] = []
+    const settled = await Promise.allSettled(ids.map(id => getTaskDetail(id)))
+    const results: DownloadTask[] = []
+    settled.forEach((item, index) => {
+      const id = ids[index]
+      if (item.status === 'fulfilled' && item.value.code === 1000) {
+        results.push(item.value.data)
       } else {
         staleIds.push(id)
       }
-    } catch {
-      staleIds.push(id)
+    })
+
+    for (const id of staleIds) {
+      store.removeTaskId(id)
     }
+    tasks.value = results
+  } finally {
+    listLoading.value = false
+    taskRefreshInFlight = false
   }
-  for (const id of staleIds) {
-    store.removeTaskId(id)
-  }
-  tasks.value = results
-  listLoading.value = false
 }
 
 function selectTask(taskId: string) {
@@ -158,17 +165,18 @@ function selectTask(taskId: string) {
 // ── Auto refresh ──
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 const autoRefreshActive = ref(true)
+let taskRefreshInFlight = false
 
 function startAutoRefresh() {
   stopAutoRefresh()
   autoRefreshActive.value = true
   refreshTimer = setInterval(() => {
     if (hasActiveTasks.value) {
-      fetchAllTasks()
+      void fetchAllTasks()
     } else {
       stopAutoRefresh()
     }
-  }, 5000)
+  }, TASK_REFRESH_INTERVAL_MS)
 }
 
 function stopAutoRefresh() {
@@ -213,6 +221,13 @@ const isAllSelected = computed(() => {
 })
 
 const hasSelection = computed(() => selectedTaskIds.value.size > 0)
+const selectedStoppableTaskIds = computed(() =>
+  [...selectedTaskIds.value].filter(id => {
+    const task = tasks.value.find(t => t.TaskID === id)
+    return task ? isStoppable(task) : false
+  })
+)
+const hasSelectedStoppableTasks = computed(() => selectedStoppableTaskIds.value.length > 0)
 
 function toggleSelectAll() {
   if (isAllSelected.value) {
@@ -265,6 +280,87 @@ const hasFilteredTasks = computed(() =>
   tasks.value.some(t => statusFilter.value === 'all' || normalizeStatus(t.Status) === statusFilter.value)
 )
 
+const stoppingId = ref<string | null>(null)
+const batchStopping = ref(false)
+const deletingFileId = ref<string | null>(null)
+
+function isStoppable(task: DownloadTask): boolean {
+  return activeStatuses.includes(normalizeStatus(task.Status))
+}
+
+function canDeleteDownloadedFile(task: DownloadTask): boolean {
+  return ['complete', 'stopped', 'error'].includes(normalizeStatus(task.Status))
+}
+
+function canRetry(task: DownloadTask): boolean {
+  return ['stopped', 'error'].includes(normalizeStatus(task.Status))
+}
+
+function replaceTask(updated: DownloadTask) {
+  tasks.value = tasks.value.map(task => task.TaskID === updated.TaskID ? updated : task)
+}
+
+async function handleStopTask(taskId: string) {
+  stoppingId.value = taskId
+  try {
+    const res = await stopTask(taskId)
+    if (res.code === 1000) {
+      replaceTask(res.data)
+    } else {
+      alert(res.msg || t('tasks.stop_failed'))
+    }
+  } catch (e: any) {
+    alert(e?.message || t('common.request_error'))
+  } finally {
+    stoppingId.value = null
+  }
+}
+
+async function handleStopSelected() {
+  const ids = selectedStoppableTaskIds.value
+  if (ids.length === 0) return
+  batchStopping.value = true
+  try {
+    const res = await stopTasks(ids)
+    if (res.code === 1000) {
+      for (const task of res.data.tasks || []) {
+        replaceTask(task)
+      }
+      const failedCount = Object.keys(res.data.failed || {}).length
+      if (failedCount > 0) {
+        alert(t('tasks.stop_partial_failed', { count: failedCount }))
+      }
+      selectedTaskIds.value = new Set()
+    } else {
+      alert(res.msg || t('tasks.stop_failed'))
+    }
+  } catch (e: any) {
+    alert(e?.message || t('common.request_error'))
+  } finally {
+    batchStopping.value = false
+  }
+}
+
+async function handleDeleteTaskFile(taskId: string) {
+  const task = tasks.value.find(t => t.TaskID === taskId)
+  if (!task || !canDeleteDownloadedFile(task)) return
+  if (!window.confirm(t('tasks.delete_file_confirm'))) return
+
+  deletingFileId.value = taskId
+  try {
+    const res = await deleteTaskFile(taskId)
+    if (res.code === 1000 && res.data?.task) {
+      replaceTask(res.data.task)
+    } else {
+      alert(res.msg || t('tasks.delete_file_failed'))
+    }
+  } catch (e: any) {
+    alert(e?.message || t('common.request_error'))
+  } finally {
+    deletingFileId.value = null
+  }
+}
+
 onMounted(async () => {
   await fetchAllTasks()
   if (hasActiveTasks.value) startAutoRefresh()
@@ -288,6 +384,7 @@ async function handleRetry(taskId: string) {
     const res = await retryTask(taskId)
     if (res.code === 1000) {
       await fetchAllTasks()
+      startAutoRefresh()
     } else {
       console.error('retry failed:', res.msg)
     }
@@ -350,6 +447,63 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+function numberValue(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function taskProgress(task: DownloadTask): number {
+  const status = normalizeStatus(task.Status)
+  if (status === 'deleted') return 0
+  if (status === 'complete') return 100
+
+  const total = numberValue(task.TotalLength) || task.FileSize || 0
+  const completed = numberValue(task.CompletedLength)
+  if (total > 0 && completed > 0) {
+    return Math.max(0, Math.min(status === 'active' ? 99.99 : 100, (completed / total) * 100))
+  }
+
+  const persisted = numberValue(task.Progress)
+  if (persisted > 0) {
+    return Math.max(0, Math.min(status === 'active' ? 99.99 : 100, persisted))
+  }
+
+  const speed = numberValue(task.DownloadSpeed)
+  const startedAt = task.StartedAt || task.CreatedAt
+  if (total > 0 && speed > 0 && startedAt) {
+    const elapsedSeconds = Math.max(0, (Date.now() - new Date(startedAt).getTime()) / 1000)
+    return Math.max(1, Math.min(95, (elapsedSeconds * speed / total) * 100))
+  }
+
+  return 0
+}
+
+function progressLabel(task: DownloadTask): string {
+  const progress = taskProgress(task)
+  if (normalizeStatus(task.Status) === 'deleted') return t('tasks.file_deleted')
+  if (normalizeStatus(task.Status) === 'waiting' && progress <= 0) return t('tasks.waiting_progress')
+  return `${progress.toFixed(progress >= 10 || progress === 0 ? 0 : 1)}%`
+}
+
+function progressDetail(task: DownloadTask): string {
+  if (normalizeStatus(task.Status) === 'deleted') return t('tasks.file_deleted')
+  const completed = numberValue(task.CompletedLength)
+  const total = numberValue(task.TotalLength) || task.FileSize || 0
+  const speed = numberValue(task.DownloadSpeed)
+  const parts: string[] = []
+  if (completed > 0 && total > 0) {
+    parts.push(`${formatBytes(completed)} / ${formatBytes(total)}`)
+  }
+  if (speed > 0 && normalizeStatus(task.Status) === 'active') {
+    parts.push(`${formatBytes(speed)}/s`)
+  }
+  return parts.join(' · ') || '—'
+}
+
 function statusLabel(s: string): string {
   if (s === 'all') return t('tasks.status_all')
   const mapped = normalizeStatus(s)
@@ -365,7 +519,10 @@ function normalizeStatus(s: string): string {
     downloading: 'active',
     failed: 'error',
     completed: 'complete',
-    cancelled: 'complete',
+    cancelled: 'stopped',
+    canceled: 'stopped',
+    removed: 'stopped',
+    file_deleted: 'deleted',
   }
   return map[s] || s
 }
@@ -444,7 +601,7 @@ function formatTime(t: string | null | undefined): string {
     <div class="toolbar">
       <div class="toolbar__tabs">
         <button
-          v-for="st in ['all', 'active', 'error', 'complete']"
+          v-for="st in ['all', 'active', 'paused', 'stopped', 'deleted', 'error', 'complete']"
           :key="st"
           class="tab-btn"
           :class="{ 'tab-btn--active': statusFilter === st }"
@@ -454,11 +611,19 @@ function formatTime(t: string | null | undefined): string {
           <span class="tab-count">({{ statusCounts[st] || 0 }})</span>
         </button>
       </div>
-<button
-        v-if="hasSelection || hasFilteredTasks"
-        class="btn btn--sm btn--danger"
-        @click="hasSelection ? clearSelected() : clearFiltered()"
-      >{{ hasSelection ? `${t('tasks.clear_selected')} (${selectedTaskIds.size})` : t('tasks.clear_filtered') }}</button>
+      <div class="toolbar__actions">
+        <button
+          v-if="hasSelectedStoppableTasks"
+          class="btn btn--sm btn--warning"
+          :disabled="batchStopping"
+          @click="handleStopSelected"
+        >{{ batchStopping ? t('tasks.stopping') : `${t('tasks.stop_selected')} (${selectedStoppableTaskIds.length})` }}</button>
+        <button
+          v-if="hasSelection || hasFilteredTasks"
+          class="btn btn--sm btn--danger"
+          @click="hasSelection ? clearSelected() : clearFiltered()"
+        >{{ hasSelection ? `${t('tasks.clear_selected')} (${selectedTaskIds.size})` : t('tasks.clear_filtered') }}</button>
+      </div>
     </div>
 
     <div v-if="listLoading && tasks.length === 0" class="loading-hint">{{ t('tasks.loading') }}</div>
@@ -472,6 +637,7 @@ function formatTime(t: string | null | undefined): string {
         <span class="sortable" @click="toggleSort('FileName')">{{ t('tasks.file_name') }}<span class="sort-arrow">{{ sortIndicator('FileName') }}</span></span>
         <span class="sortable" @click="toggleSort('FileSize')">{{ t('tasks.size_col') }}<span class="sort-arrow">{{ sortIndicator('FileSize') }}</span></span>
         <span class="sortable" @click="toggleSort('Status')">{{ t('tasks.status_col') }}<span class="sort-arrow">{{ sortIndicator('Status') }}</span></span>
+        <span>{{ t('tasks.progress_col') }}</span>
         <span class="sortable" @click="toggleSort('CreatedAt')">{{ statusFilter === 'complete' ? t('tasks.finished_col') : t('tasks.created_col') }}<span class="sort-arrow">{{ sortIndicator('CreatedAt') }}</span></span>
       </div>
       <div
@@ -509,7 +675,25 @@ function formatTime(t: string | null | undefined): string {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </span>
-            <span class="task-row__delete" @click.stop="handleDelete(t.TaskID)" data-tooltip="清除记录">
+            <span
+              v-if="isStoppable(t)"
+              class="task-row__stop"
+              :class="{ 'task-row__stop--loading': stoppingId === t.TaskID }"
+              @click.stop="handleStopTask(t.TaskID)"
+              :data-tooltip="$t('tasks.stop_task')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </span>
+            <span
+              v-if="canDeleteDownloadedFile(t)"
+              class="task-row__file-delete"
+              :class="{ 'task-row__file-delete--loading': deletingFileId === t.TaskID }"
+              @click.stop="handleDeleteTaskFile(t.TaskID)"
+              :data-tooltip="$t('tasks.delete_file')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11l4 4"/><path d="M14 11l-4 4"/></svg>
+            </span>
+            <span class="task-row__delete" @click.stop="handleDelete(t.TaskID)" :data-tooltip="$t('tasks.clear_record')">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
             </span>
           </span>
@@ -518,10 +702,19 @@ function formatTime(t: string | null | undefined): string {
         <span class="task-row__status">
           <span class="badge" :class="badgeClass(t.Status)">{{ statusLabel(t.Status) }}</span>
         </span>
+        <span class="task-row__progress">
+          <span class="progress-track">
+            <span class="progress-fill" :style="{ width: `${taskProgress(t)}%` }"></span>
+          </span>
+          <span class="progress-meta">
+            <strong>{{ progressLabel(t) }}</strong>
+            <small>{{ progressDetail(t) }}</small>
+          </span>
+        </span>
         <span class="task-row__time">
           <span>{{ formatTime(statusFilter === 'complete' ? t.FinishedAt : t.CreatedAt) }}</span>
           <button
-            v-if="normalizeStatus(t.Status) === 'error'"
+            v-if="canRetry(t)"
             class="btn btn--retry"
             :disabled="retryingId === t.TaskID"
             @click.stop="handleRetry(t.TaskID)"
@@ -575,14 +768,39 @@ function formatTime(t: string | null | undefined): string {
             <span class="badge" :class="badgeClass(selectedTask.Status)">{{ statusLabel(selectedTask.Status) }}</span>
           </div>
           <div class="detail-field">
+            <span class="detail-field__label">{{ t('tasks.progress') }}</span>
+            <div class="detail-progress">
+              <span class="progress-track">
+                <span class="progress-fill" :style="{ width: `${taskProgress(selectedTask)}%` }"></span>
+              </span>
+              <span>{{ progressLabel(selectedTask) }} · {{ progressDetail(selectedTask) }}</span>
+            </div>
+          </div>
+          <div class="detail-field">
             <span class="detail-field__label">{{ t('tasks.retry_count') }}</span>
             <span>{{ selectedTask.RetryCount }}</span>
+          </div>
+          <div class="detail-field" v-if="isStoppable(selectedTask)">
+            <span class="detail-field__label">{{ t('tasks.stop_task') }}</span>
+            <button
+              class="btn btn--stop"
+              :disabled="stoppingId === selectedTask.TaskID"
+              @click="handleStopTask(selectedTask.TaskID)"
+            >{{ stoppingId === selectedTask.TaskID ? $t('tasks.stopping') : $t('tasks.stop_task') }}</button>
+          </div>
+          <div class="detail-field" v-if="canDeleteDownloadedFile(selectedTask)">
+            <span class="detail-field__label">{{ t('tasks.delete_file') }}</span>
+            <button
+              class="btn btn--file-delete"
+              :disabled="deletingFileId === selectedTask.TaskID"
+              @click="handleDeleteTaskFile(selectedTask.TaskID)"
+            >{{ deletingFileId === selectedTask.TaskID ? $t('tasks.deleting_file') : $t('tasks.delete_file') }}</button>
           </div>
           <div class="detail-field" v-if="selectedTask.ErrorMessage">
             <span class="detail-field__label">{{ t('tasks.error') }}</span>
             <span class="text--error">{{ selectedTask.ErrorMessage }}</span>
           </div>
-          <div class="detail-field" v-if="normalizeStatus(selectedTask.Status) === 'error'">
+          <div class="detail-field" v-if="canRetry(selectedTask)">
             <span class="detail-field__label">{{ t('tasks.retry_btn') }}</span>
             <button
               class="btn btn--retry"
@@ -679,6 +897,14 @@ function formatTime(t: string | null | undefined): string {
   flex-wrap: wrap;
 }
 
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .tab-btn {
   padding: 6px 12px;
   border-radius: 6px;
@@ -724,6 +950,15 @@ function formatTime(t: string | null | undefined): string {
   background: rgba(239, 68, 68, 0.1);
   border-color: #dc2626;
 }
+.btn--warning {
+  color: #b45309;
+  border-color: #fcd34d;
+  background: rgba(245, 158, 11, 0.1);
+}
+.btn--warning:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #f59e0b;
+}
 
 /* ── Task table ── */
 .task-table {
@@ -735,7 +970,7 @@ function formatTime(t: string | null | undefined): string {
 
 .task-table__head {
   display: grid;
-  grid-template-columns: 36px 1fr 90px 110px 230px;
+  grid-template-columns: 36px minmax(180px, 1fr) 90px 104px minmax(150px, 210px) 190px;
   gap: 12px;
   padding: 10px 16px;
   background: var(--surface);
@@ -758,7 +993,7 @@ function formatTime(t: string | null | undefined): string {
 
 .task-row {
   display: grid;
-  grid-template-columns: 36px 1fr 90px 110px 230px;
+  grid-template-columns: 36px minmax(180px, 1fr) 90px 104px minmax(150px, 210px) 190px;
   gap: 12px;
   padding: 12px 16px;
   font-size: 14px;
@@ -813,7 +1048,9 @@ function formatTime(t: string | null | undefined): string {
 }
 
 .task-row__delete,
-.task-row__open {
+.task-row__open,
+.task-row__stop,
+.task-row__file-delete {
   cursor: pointer;
   color: var(--muted);
   transition: color 0.15s;
@@ -829,7 +1066,23 @@ function formatTime(t: string | null | undefined): string {
   color: #dc2626;
   background: rgba(239, 68, 68, 0.1);
 }
+.task-row__file-delete:hover {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.12);
+}
+.task-row__stop:hover {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
 .task-row__open--loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.task-row__stop--loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.task-row__file-delete--loading {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -873,6 +1126,54 @@ function formatTime(t: string | null | undefined): string {
   align-items: center;
 }
 
+.task-row__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.progress-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8 0%, #22c55e 100%);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.3);
+  transition: width 240ms ease;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.progress-meta strong {
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.progress-meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-row__time {
   color: var(--muted);
   font-size: 13px;
@@ -891,11 +1192,17 @@ function formatTime(t: string | null | undefined): string {
 }
 .badge--waiting { background: #fef3c7; color: #92400e; }
 .badge--active { background: #dbeafe; color: #1e40af; }
+.badge--paused { background: #ede9fe; color: #6d28d9; }
+.badge--stopped { background: #e5e7eb; color: #374151; }
+.badge--deleted { background: #fee2e2; color: #991b1b; }
 .badge--complete { background: #10b981; color: white; }
 .badge--error { background: #fef2f2; color: #dc2626; }
 
 [data-theme="dark"] .badge--waiting { background: rgba(146,64,14,0.3); color: #fcd34d; }
 [data-theme="dark"] .badge--active { background: rgba(30,64,175,0.3); color: #93c5fd; }
+[data-theme="dark"] .badge--paused { background: rgba(109,40,217,0.26); color: #c4b5fd; }
+[data-theme="dark"] .badge--stopped { background: rgba(148,163,184,0.18); color: #d1d5db; }
+[data-theme="dark"] .badge--deleted { background: rgba(220,38,38,0.18); color: #fca5a5; }
 [data-theme="dark"] .badge--complete { background: rgba(16,185,129,0.3); color: #6ee7b7; }
 [data-theme="dark"] .badge--error { background: rgba(239,68,68,0.15); color: #fca5a5; }
 
@@ -1011,6 +1318,14 @@ function formatTime(t: string | null | undefined): string {
   gap: 8px;
   min-width: 0;
 }
+
+.detail-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
 .direct-link-value {
   flex: 1;
   overflow-x: auto;
@@ -1086,6 +1401,40 @@ function formatTime(t: string | null | undefined): string {
   border-color: #dc2626;
 }
 .btn--retry:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn--stop {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #fcd34d;
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn--stop:hover:not(:disabled) {
+  background: #f59e0b;
+  color: white;
+  border-color: #f59e0b;
+}
+.btn--file-delete {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn--file-delete:hover:not(:disabled) {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
 
 [data-theme="dark"] .btn--retry {
   border-color: rgba(239, 68, 68, 0.4);
@@ -1151,6 +1500,14 @@ function formatTime(t: string | null | undefined): string {
     padding-bottom: 4px;
   }
 
+  .toolbar__actions {
+    justify-content: stretch;
+  }
+
+  .toolbar__actions .btn {
+    flex: 1;
+  }
+
   .tab-btn {
     padding: 5px 10px;
     font-size: 12px;
@@ -1202,7 +1559,9 @@ function formatTime(t: string | null | undefined): string {
   }
 
   .task-row__delete,
-  .task-row__open {
+  .task-row__open,
+  .task-row__file-delete,
+  .task-row__stop {
     padding: 6px;
   }
 
@@ -1212,6 +1571,10 @@ function formatTime(t: string | null | undefined): string {
 
   .task-row__status {
     margin: 2px 0;
+  }
+
+  .task-row__progress {
+    width: 100%;
   }
 
   .task-row__time {

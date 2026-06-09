@@ -161,6 +161,10 @@ func runServer() {
 		storageGroup.GET("/driverInfo", storageHandler.GetDriverInfo)
 		storageGroup.GET("/files", storageHandler.GetFiles)
 		storageGroup.GET("/file", storageHandler.GetFileInfo)
+		storageGroup.POST("/files/remove", storageHandler.RemoveFiles)
+		storageGroup.POST("/files/copy", storageHandler.CopyFiles)
+		storageGroup.POST("/files/move", storageHandler.MoveFiles)
+		storageGroup.POST("/file/rename", storageHandler.RenameFile)
 	}
 
 	systemGroup := r.Group("/api/v1/system")
@@ -179,8 +183,11 @@ func runServer() {
 		downloadGroup.HEAD("/direct", downloadHandler.DownloadDirect)
 		downloadGroup.GET("/folder-zip", downloadHandler.DownloadFolderZip)
 		downloadGroup.POST("/tasks", downloadHandler.CreateTask)
+		downloadGroup.POST("/tasks/stop", downloadHandler.StopTasks)
 		downloadGroup.GET("/tasks/:id", downloadHandler.GetTask)
 		downloadGroup.GET("/aria2-status", downloadHandler.GetAria2Status)
+		downloadGroup.POST("/tasks/:id/stop", downloadHandler.StopTask)
+		downloadGroup.POST("/tasks/:id/delete-file", downloadHandler.DeleteTaskFile)
 		downloadGroup.POST("/tasks/:id/retry", downloadHandler.RetryTask)
 		downloadGroup.POST("/tasks/:id/open", downloadHandler.OpenFile)
 		downloadGroup.POST("/tasks/:id/open-location", downloadHandler.OpenFileLocation)

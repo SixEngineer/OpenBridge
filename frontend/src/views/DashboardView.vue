@@ -64,6 +64,8 @@ const backendDetail = ref(t('dashboard.backend_api_connected'))
 const systemMetrics = ref<SystemMetrics | null>(null)
 const systemMetricsError = ref('')
 let metricsTimer: ReturnType<typeof setInterval> | null = null
+const METRICS_REFRESH_INTERVAL_MS = 1000
+let metricsRefreshInFlight = false
 
 const primaryProviderId = ref<number | null>(null)
 
@@ -310,12 +312,16 @@ async function checkBackend() {
 }
 
 async function fetchHostMetrics() {
+  if (metricsRefreshInFlight) return
+  metricsRefreshInFlight = true
   try {
     const res = await getSystemMetrics()
     systemMetrics.value = res.data
     systemMetricsError.value = ''
   } catch (error: any) {
     systemMetricsError.value = error?.message || t('common.request_error')
+  } finally {
+    metricsRefreshInFlight = false
   }
 }
 
@@ -323,7 +329,7 @@ function startMetricsPolling() {
   stopMetricsPolling()
   metricsTimer = setInterval(() => {
     void fetchHostMetrics()
-  }, 15000)
+  }, METRICS_REFRESH_INTERVAL_MS)
 }
 
 function stopMetricsPolling() {

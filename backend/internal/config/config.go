@@ -20,6 +20,7 @@ type AppConfig struct {
 	Name            string
 	Env             string
 	Port            string
+	Version         string
 	AutoOpenBrowser bool
 }
 
@@ -72,6 +73,7 @@ func ReadConfig() Config {
 			Name:            os.Getenv("APP_NAME"),
 			Env:             os.Getenv("APP_ENV"),
 			Port:            os.Getenv("APP_PORT"),
+			Version:         os.Getenv("APP_VERSION"),
 			AutoOpenBrowser: getEnvBool("APP_AUTO_OPEN_BROWSER", true),
 		},
 		DB: DBConfig{

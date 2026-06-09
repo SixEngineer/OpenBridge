@@ -3,7 +3,8 @@ import { ensureDeviceId } from '@/utils/session'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 30000,
+  // 下载、文件夹扫描和大目录解析不应被前端默认超时中断。
+  timeout: 0,
 })
 
 request.interceptors.request.use(

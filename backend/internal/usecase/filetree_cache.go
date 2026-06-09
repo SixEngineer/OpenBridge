@@ -267,6 +267,27 @@ func (c *FileTreeCache) Put(storagePath string, data *FileListData) error {
 	return nil
 }
 
+func (c *FileTreeCache) Invalidate(storagePath string) {
+	normalized := normalizeStoragePath(storagePath)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	node := c.lookupLocked(normalized)
+	if node == nil {
+		return
+	}
+	node.Loaded = false
+	node.CachedAt = time.Time{}
+	node.Content = nil
+	node.Total = 0
+	node.Readme = ""
+	node.Header = ""
+	node.Write = false
+	node.Provider = ""
+	c.dirty = true
+}
+
 func (c *FileTreeCache) resetLocked() {
 	c.tree = FILETREE{
 		Version:         fileTreeCacheVersion,

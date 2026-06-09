@@ -2,6 +2,9 @@
 export type DownloadStatus =
   | 'waiting'
   | 'active'
+  | 'paused'
+  | 'stopped'
+  | 'deleted'
   | 'error'
   | 'complete'
 
@@ -27,6 +30,9 @@ export interface DownloadTask {
   Aria2GID: string
   Status: string
   Progress: number
+  CompletedLength?: number
+  TotalLength?: number
+  DownloadSpeed?: number
   ErrorMessage: string
   RetryCount: number
   StartedAt: string | null

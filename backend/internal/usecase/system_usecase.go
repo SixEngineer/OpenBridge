@@ -52,6 +52,9 @@ type SystemUseCase struct {
 	runtimeController systemRuntimeController
 	metricsMu         sync.Mutex
 	lastNetworkSample *networkRateSample
+	metricsCacheMu    sync.Mutex
+	cachedMetrics     *SystemMetricsView
+	cachedMetricsAt   time.Time
 }
 
 type systemRuntimeController interface {
@@ -98,12 +101,31 @@ func (u *SystemUseCase) PickLocalPath(input PickLocalPathInput) (PickLocalPathVi
 }
 
 func (u *SystemUseCase) GetSystemMetrics() (SystemMetricsView, error) {
+	u.metricsCacheMu.Lock()
+	defer u.metricsCacheMu.Unlock()
+
+	if u.cachedMetrics != nil && time.Since(u.cachedMetricsAt) < 900*time.Millisecond {
+		return *u.cachedMetrics, nil
+	}
+
+	var (
+		result SystemMetricsView
+		err    error
+	)
 	switch runtime.GOOS {
 	case "windows":
-		return u.getWindowsSystemMetrics()
+		result, err = u.getWindowsSystemMetrics()
 	default:
-		return SystemMetricsView{}, errors.New("system metrics are not supported on this platform yet")
+		err = errors.New("system metrics are not supported on this platform yet")
 	}
+	if err != nil {
+		return SystemMetricsView{}, err
+	}
+
+	cached := result
+	u.cachedMetrics = &cached
+	u.cachedMetricsAt = time.Now()
+	return result, nil
 }
 
 func (u *SystemUseCase) RestartApplication() ServiceControlView {

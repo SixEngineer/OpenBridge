@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
+import brandLogo from '@/assets/openbridge-logo.svg'
 
 const router = useRouter()
 const store = useConsoleStore()
@@ -57,8 +58,7 @@ function enterConsole() {
       <p class="hero__eyebrow">{{ t('portal.eyebrow') }}</p>
 
       <button class="wordmark" type="button" @click="enterConsole">
-        <span class="wordmark__open">Open</span>
-        <span class="wordmark__bridge">Bridge</span>
+        <img class="wordmark__image" :src="brandLogo" alt="OpenBridge" />
       </button>
 
       <p class="hero__subtitle">{{ t('portal.subtitle') }}</p>
@@ -183,14 +183,12 @@ function enterConsole() {
 
 .wordmark {
   margin: 0;
-  padding: 0;
+  padding: 8px;
   border: 0;
   background: transparent;
   cursor: pointer;
   color: inherit;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.2em;
+  display: inline-block;
   overflow: visible;
   transition: transform 240ms ease, filter 240ms ease, opacity 240ms ease;
 }
@@ -200,26 +198,12 @@ function enterConsole() {
   filter: brightness(1.08);
 }
 
-.wordmark__open,
-.wordmark__bridge {
-  font-size: clamp(3.7rem, 12vw, 9rem);
-  line-height: 1.06;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-}
-
-.wordmark__open {
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 0 42px rgba(255, 255, 255, 0.14);
-}
-
-.wordmark__bridge {
-  background: linear-gradient(135deg, #73d5ff 0%, #86ffd1 45%, #ffffff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 56px rgba(115, 213, 255, 0.34);
-  padding: 0 0.06em 0.14em 0;
+.wordmark__image {
+  display: block;
+  width: min(760px, 86vw);
+  max-height: 390px;
+  object-fit: contain;
+  filter: drop-shadow(0 28px 60px rgba(226, 52, 63, 0.2));
 }
 
 .hero__subtitle {
@@ -307,9 +291,11 @@ function enterConsole() {
   }
 
   .wordmark {
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
+    padding: 0;
+  }
+
+  .wordmark__image {
+    width: min(560px, 94vw);
   }
 }
 </style>

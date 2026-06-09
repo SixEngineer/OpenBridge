@@ -28,6 +28,7 @@ const aria2UrlInput = ref('http://127.0.0.1:6800/jsonrpc')
 const savedAria2Url = ref('')
 const settingsLoading = ref(false)
 const settingsError = ref(false)
+const appVersion = ref('v1.2')
 const savingAria2 = ref(false)
 const aria2PathInput = ref('')
 const savedAria2Path = ref('')
@@ -115,6 +116,7 @@ async function fetchSettings() {
   settingsError.value = false
   try {
     const res = await getSettings()
+    appVersion.value = res.data.app_version || 'v1.2'
     savedAria2Url.value = res.data.aria2_rpc_url || 'http://127.0.0.1:6800/jsonrpc'
     savedAria2Path.value = res.data.aria2_path || ''
     savedAria2AutoStart.value = Boolean(res.data.aria2_auto_start)
@@ -669,7 +671,7 @@ onMounted(() => {
       </article>
     </div>
 
-    <p class="version-info">OpenBridge v0.1.0</p>
+    <p class="version-info">OpenBridge {{ appVersion }}</p>
   </section>
 </template>
 

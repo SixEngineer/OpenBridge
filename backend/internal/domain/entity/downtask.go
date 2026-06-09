@@ -15,13 +15,16 @@ type DownloadTask struct {
 	FilePath string `gorm:"type:text"`
 	// ProviderAccountID *uint   `gorm:"index"`
 	// ProviderType      string  `gorm:"size:50;index"`
-	Aria2GID     string  `gorm:"size:64;index"`
-	Status       string  `gorm:"size:30;not null;index"`
-	Progress     float64 `gorm:"default:0"`
-	ErrorMessage string  `gorm:"type:text"`
-	RetryCount   int     `gorm:"default:0"`
-	StartedAt    *time.Time
-	FinishedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	Aria2GID        string  `gorm:"size:64;index"`
+	Status          string  `gorm:"size:30;not null;index"`
+	Progress        float64 `gorm:"default:0"`
+	CompletedLength int64   `gorm:"-"`
+	TotalLength     int64   `gorm:"-"`
+	DownloadSpeed   int64   `gorm:"-"`
+	ErrorMessage    string  `gorm:"type:text"`
+	RetryCount      int     `gorm:"default:0"`
+	StartedAt       *time.Time
+	FinishedAt      *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }

@@ -17,6 +17,7 @@ type SettingsUseCase struct {
 
 type SettingsView struct {
 	OpenListBaseURL     string `json:"openlist_base_url"`
+	AppVersion          string `json:"app_version"`
 	Aria2RPCURL         string `json:"aria2_rpc_url"`
 	Aria2Path           string `json:"aria2_path"`
 	Aria2AutoStart      bool   `json:"aria2_auto_start"`
@@ -43,6 +44,7 @@ func (u *SettingsUseCase) GetSettings() SettingsView {
 
 	return SettingsView{
 		OpenListBaseURL:     strings.TrimSpace(u.config.OpenList.BaseURL),
+		AppVersion:          normalizeAppVersion(u.config.App.Version),
 		Aria2RPCURL:         strings.TrimSpace(u.config.Aria2.RPCURL),
 		Aria2Path:           strings.TrimSpace(u.config.Aria2.Path),
 		Aria2AutoStart:      u.config.Aria2.AutoStart,
@@ -52,6 +54,14 @@ func (u *SettingsUseCase) GetSettings() SettingsView {
 		FileTreeCacheSizeKB: cacheSizeKB,
 		FileTreeCacheDepth:  u.config.FileTree.MaxDepth,
 	}
+}
+
+func normalizeAppVersion(version string) string {
+	trimmed := strings.TrimSpace(version)
+	if trimmed == "" {
+		return "v1.2"
+	}
+	return trimmed
 }
 
 func (u *SettingsUseCase) UpdateOpenListBaseURL(baseURL string) (SettingsView, error) {

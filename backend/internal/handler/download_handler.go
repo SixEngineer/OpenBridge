@@ -28,6 +28,10 @@ type CreateTaskRequest struct {
 	Dir  string `json:"dir"`
 }
 
+type StopTasksRequest struct {
+	TaskIDs []string `json:"task_ids"`
+}
+
 func NewDownloadHandler(downloadUseCase *usecase.DownloadUseCase, storageUseCase *usecase.StorageUseCase) *DownloadHandler {
 	return &DownloadHandler{
 		downloadUseCase: downloadUseCase,
@@ -151,6 +155,42 @@ func (h *DownloadHandler) GetTask(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: task})
+}
+
+func (h *DownloadHandler) StopTask(c *gin.Context) {
+	taskID := c.Param("id")
+	task, err := h.downloadUseCase.StopTask(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadCreateFailed, Message: err.Error(), Data: task})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: task})
+}
+
+func (h *DownloadHandler) StopTasks(c *gin.Context) {
+	var req StopTasksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+	result := h.downloadUseCase.StopTasks(req.TaskIDs)
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
+}
+
+func (h *DownloadHandler) DeleteTaskFile(c *gin.Context) {
+	taskID := c.Param("id")
+	task, filePath, err := h.downloadUseCase.DeleteTaskFile(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeDownloadOpenFailed, Message: err.Error(), Data: gin.H{
+			"task":      task,
+			"file_path": filePath,
+		}})
+		return
+	}
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: gin.H{
+		"task":      task,
+		"file_path": filePath,
+	}})
 }
 
 func (h *DownloadHandler) GetAria2Status(c *gin.Context) {

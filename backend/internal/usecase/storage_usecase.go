@@ -155,6 +155,14 @@ type DirectLinkResult struct {
 	StoragePath     string `json:"-"`
 }
 
+type FileOperationResult struct {
+	Operation string   `json:"operation"`
+	Dir       string   `json:"dir,omitempty"`
+	Path      string   `json:"path,omitempty"`
+	DstDir    string   `json:"dst_dir,omitempty"`
+	Names     []string `json:"names,omitempty"`
+}
+
 type zipFileSource struct {
 	Name       string
 	DirectLink string
@@ -404,7 +412,7 @@ func (s *StorageUseCase) fetchFilesRemoteWithAccess(access OpenListAccess, path 
 		return nil, fmt.Errorf("openlist base url is empty")
 	}
 
-	client := http.Client{Timeout: 10 * time.Second}
+	client := http.Client{Timeout: 0}
 	requestBody := map[string]interface{}{
 		"path":     path,
 		"page":     page,
@@ -636,6 +644,170 @@ func (s *StorageUseCase) GetFileInfoForDevice(deviceID string, visiblePath strin
 		return nil, err
 	}
 	return nil, lastErr
+}
+
+func (s *StorageUseCase) RemoveFilesForDevice(deviceID string, visibleDir string, names []string) (FileOperationResult, error) {
+	cleanNames := normalizeOperationNames(names)
+	if len(cleanNames) == 0 {
+		return FileOperationResult{}, errors.New("no files selected")
+	}
+
+	access, err := s.getOpenListAccess(deviceID)
+	if err != nil {
+		return FileOperationResult{}, err
+	}
+
+	var lastErr error
+	for _, storageDir := range storagePathCandidates(access.BasePath, visibleDir) {
+		err := s.postOpenListFSAction(access, "remove", map[string]interface{}{
+			"dir":   storageDir,
+			"names": cleanNames,
+		})
+		if err == nil {
+			s.invalidateFileTreeCache(storageDir)
+			return FileOperationResult{Operation: "remove", Dir: visibleDir, Names: cleanNames}, nil
+		}
+		lastErr = err
+		if shouldTryFallbackForPath(err) {
+			continue
+		}
+		return FileOperationResult{}, err
+	}
+	return FileOperationResult{}, lastErr
+}
+
+func (s *StorageUseCase) RenameFileForDevice(deviceID string, visiblePath string, newName string) (FileOperationResult, error) {
+	trimmedName := strings.TrimSpace(newName)
+	if trimmedName == "" || strings.Contains(trimmedName, "/") || strings.Contains(trimmedName, "\\") {
+		return FileOperationResult{}, errors.New("new name invalid")
+	}
+
+	access, err := s.getOpenListAccess(deviceID)
+	if err != nil {
+		return FileOperationResult{}, err
+	}
+
+	var lastErr error
+	for _, storagePath := range storagePathCandidates(access.BasePath, visiblePath) {
+		err := s.postOpenListFSAction(access, "rename", map[string]interface{}{
+			"path": storagePath,
+			"name": trimmedName,
+		})
+		if err == nil {
+			s.invalidateFileTreeCache(path.Dir(storagePath))
+			return FileOperationResult{Operation: "rename", Path: visiblePath, Names: []string{trimmedName}}, nil
+		}
+		lastErr = err
+		if shouldTryFallbackForPath(err) {
+			continue
+		}
+		return FileOperationResult{}, err
+	}
+	return FileOperationResult{}, lastErr
+}
+
+func (s *StorageUseCase) CopyFilesForDevice(deviceID string, visibleSrcDir string, visibleDstDir string, names []string) (FileOperationResult, error) {
+	return s.transferFilesForDevice(deviceID, "copy", visibleSrcDir, visibleDstDir, names)
+}
+
+func (s *StorageUseCase) MoveFilesForDevice(deviceID string, visibleSrcDir string, visibleDstDir string, names []string) (FileOperationResult, error) {
+	return s.transferFilesForDevice(deviceID, "move", visibleSrcDir, visibleDstDir, names)
+}
+
+func (s *StorageUseCase) transferFilesForDevice(deviceID string, operation string, visibleSrcDir string, visibleDstDir string, names []string) (FileOperationResult, error) {
+	cleanNames := normalizeOperationNames(names)
+	if len(cleanNames) == 0 {
+		return FileOperationResult{}, errors.New("no files selected")
+	}
+
+	access, err := s.getOpenListAccess(deviceID)
+	if err != nil {
+		return FileOperationResult{}, err
+	}
+
+	srcCandidates := storagePathCandidates(access.BasePath, visibleSrcDir)
+	dstCandidates := storagePathCandidates(access.BasePath, visibleDstDir)
+	var lastErr error
+	for _, srcDir := range srcCandidates {
+		for _, dstDir := range dstCandidates {
+			err := s.postOpenListFSAction(access, operation, map[string]interface{}{
+				"src_dir": srcDir,
+				"dst_dir": dstDir,
+				"names":   cleanNames,
+			})
+			if err == nil {
+				s.invalidateFileTreeCache(srcDir, dstDir)
+				return FileOperationResult{Operation: operation, Dir: visibleSrcDir, DstDir: visibleDstDir, Names: cleanNames}, nil
+			}
+			lastErr = err
+			if shouldTryFallbackForPath(err) {
+				continue
+			}
+			return FileOperationResult{}, err
+		}
+	}
+	return FileOperationResult{}, lastErr
+}
+
+func (s *StorageUseCase) postOpenListFSAction(access OpenListAccess, action string, payload map[string]interface{}) error {
+	if strings.TrimSpace(access.Token) == "" {
+		return fmt.Errorf("openlist token is empty")
+	}
+	if strings.TrimSpace(access.BaseURL) == "" {
+		return fmt.Errorf("openlist base url is empty")
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	client := http.Client{Timeout: 0}
+	req, err := http.NewRequest("POST", access.BaseURL+"/api/fs/"+strings.Trim(action, "/"), bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "OpenBridge/1.0")
+	req.Header.Set("Authorization", access.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("openlist /api/fs/%s returned status %d", action, resp.StatusCode)
+	}
+
+	var openListResp struct {
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&openListResp); err != nil {
+		return err
+	}
+	if openListResp.Code != http.StatusOK {
+		message := strings.TrimSpace(openListResp.Message)
+		if message == "" {
+			message = "unknown error"
+		}
+		return fmt.Errorf("openlist /api/fs/%s failed: %s", action, message)
+	}
+	return nil
+}
+
+func (s *StorageUseCase) invalidateFileTreeCache(paths ...string) {
+	if s.fileTreeCache == nil {
+		return
+	}
+	for _, p := range paths {
+		if strings.TrimSpace(p) != "" {
+			s.fileTreeCache.Invalidate(p)
+		}
+	}
 }
 
 func (s *StorageUseCase) ResolveDirectLink(path string) (*DirectLinkResult, error) {
@@ -934,7 +1106,7 @@ func (s *StorageUseCase) fetchFileInfoRemoteWithAccess(access OpenListAccess, st
 		return nil, fmt.Errorf("openlist base url is empty")
 	}
 
-	client := http.Client{Timeout: 10 * time.Second}
+	client := http.Client{Timeout: 0}
 	requestBody := map[string]interface{}{
 		"path": storagePath,
 	}
@@ -1076,4 +1248,21 @@ func sanitizeZipName(name string) string {
 	safe = strings.TrimPrefix(safe, "/")
 	safe = strings.Trim(safe, "/")
 	return safe
+}
+
+func normalizeOperationNames(names []string) []string {
+	result := make([]string, 0, len(names))
+	seen := map[string]struct{}{}
+	for _, name := range names {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" || strings.Contains(trimmed, "/") || strings.Contains(trimmed, "\\") {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
 }

@@ -12,7 +12,7 @@ export function createTask(data: {
   timeout?: number
 }): Promise<ApiResponse<{ task_id: string }>> {
   return request.post(endpoints.downloadTasks, data, {
-    timeout: options?.timeout ?? 60000,
+    timeout: options?.timeout ?? 0,
   })
 }
 
@@ -21,7 +21,7 @@ export function resolveDirectLink(path: string, options?: {
   timeout?: number
 }): Promise<ApiResponse<DirectLinkResult>> {
   return request.post(endpoints.downloadResolve, { path }, {
-    timeout: options?.timeout ?? 60000,
+    timeout: options?.timeout ?? 0,
   })
 }
 
@@ -39,9 +39,29 @@ export function getTaskDetail(taskId: string): Promise<ApiResponse<DownloadTask>
   return request.get(endpoints.downloadTaskDetail(taskId))
 }
 
+export interface StopTasksResult {
+  tasks: DownloadTask[]
+  failed: Record<string, string>
+}
+
+// 停止单个下载任务（后端：POST /download/tasks/:id/stop）
+export function stopTask(taskId: string): Promise<ApiResponse<DownloadTask>> {
+  return request.post(endpoints.downloadTaskStop(taskId), undefined, { timeout: 0 })
+}
+
+// 批量停止下载任务（后端：POST /download/tasks/stop）
+export function stopTasks(taskIds: string[]): Promise<ApiResponse<StopTasksResult>> {
+  return request.post(endpoints.downloadTasksStop, { task_ids: taskIds }, { timeout: 0 })
+}
+
+// 删除任务对应的本地文件，但保留任务记录（后端：POST /download/tasks/:id/delete-file）
+export function deleteTaskFile(taskId: string): Promise<ApiResponse<{ task: DownloadTask, file_path: string }>> {
+  return request.post(endpoints.downloadTaskDeleteFile(taskId), undefined, { timeout: 0 })
+}
+
 // 重试下载任务（后端：POST /download/tasks/:id/retry）
 export function retryTask(taskId: string): Promise<ApiResponse<DownloadTask>> {
-  return request.post(endpoints.downloadTaskRetry(taskId))
+  return request.post(endpoints.downloadTaskRetry(taskId), undefined, { timeout: 0 })
 }
 
 // 打开已下载的文件（后端：POST /download/tasks/:id/open）

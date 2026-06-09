@@ -33,3 +33,33 @@ export function getFiles(params: {
 export function getFileInfo(path: string): Promise<ApiResponse<any>> {
   return request.get(endpoints.storageFile, { params: { path } })
 }
+
+export function removeFiles(data: {
+  dir: string
+  names: string[]
+}): Promise<ApiResponse<any>> {
+  return request.post(endpoints.storageRemove, data, { timeout: 0 })
+}
+
+export function renameFile(data: {
+  path: string
+  name: string
+}): Promise<ApiResponse<any>> {
+  return request.post(endpoints.storageRename, data, { timeout: 0 })
+}
+
+export function copyFiles(data: {
+  src_dir: string
+  dst_dir: string
+  names: string[]
+}): Promise<ApiResponse<any>> {
+  return request.post(endpoints.storageCopy, data, { timeout: 0 })
+}
+
+export function moveFiles(data: {
+  src_dir: string
+  dst_dir: string
+  names: string[]
+}): Promise<ApiResponse<any>> {
+  return request.post(endpoints.storageMove, data, { timeout: 0 })
+}

@@ -28,7 +28,30 @@ func (repo *ProviderRepository) DeleteProviderAccount(id uint) error {
 
 // 更新 ProviderAccount
 func (repo *ProviderRepository) UpdateProviderAccount(providerAccount *entity.ProviderAccount) error {
-	return repo.db.Updates(providerAccount).Error
+	if providerAccount == nil || providerAccount.ID == 0 {
+		return gorm.ErrMissingWhereClause
+	}
+
+	return repo.db.Model(&entity.ProviderAccount{}).
+		Where("id = ?", providerAccount.ID).
+		Select(
+			"name",
+			"openlist_base_url",
+			"provider_type",
+			"net_disk",
+			"account_id",
+			"status",
+			"access_token",
+			"refresh_token",
+			"token_expires_at",
+			"auth_cookie",
+			"total_quota",
+			"used_quota",
+			"available_quota",
+			"last_quota_sync_at",
+			"last_error",
+		).
+		Updates(providerAccount).Error
 }
 
 // 获取 ProviderAccount

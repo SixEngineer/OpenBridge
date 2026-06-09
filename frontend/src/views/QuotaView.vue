@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive, nextTick } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useConsoleStore } from '@/stores/console'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +25,8 @@ async function checkBackend() {
 const selectedProviderId = ref<number | null>(null)
 const providerDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+const dropdownPanelRef = ref<HTMLElement | null>(null)
+const providerDropdownStyle = ref<Record<string, string>>({})
 
 const selectedProvider = computed(() => {
   if (selectedProviderId.value === null) return null
@@ -57,20 +59,56 @@ function selectProvider(id: number) {
   providerDropdownOpen.value = false
 }
 
+async function openProviderDropdown() {
+  providerDropdownOpen.value = true
+  await nextTick()
+  updateProviderDropdownPosition()
+}
+
+function updateProviderDropdownPosition() {
+  if (!providerDropdownOpen.value || !dropdownRef.value) return
+  const rect = dropdownRef.value.getBoundingClientRect()
+  const availableHeight = Math.max(160, window.innerHeight - rect.bottom - 16)
+  providerDropdownStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 6}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    maxHeight: `${Math.min(280, availableHeight)}px`,
+  }
+}
+
 function toggleDropdown() {
   if (backendStatus.value !== 'error') {
-    providerDropdownOpen.value = !providerDropdownOpen.value
+    if (providerDropdownOpen.value) {
+      providerDropdownOpen.value = false
+    } else {
+      void openProviderDropdown()
+    }
   }
 }
 
 // Click outside to close
 function onDocumentClick(e: MouseEvent) {
-  if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+  const target = e.target as Node
+  if (
+    dropdownRef.value &&
+    !dropdownRef.value.contains(target) &&
+    !dropdownPanelRef.value?.contains(target)
+  ) {
     providerDropdownOpen.value = false
   }
 }
-onMounted(() => document.addEventListener('click', onDocumentClick))
-onUnmounted(() => document.removeEventListener('click', onDocumentClick))
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  window.addEventListener('resize', updateProviderDropdownPosition)
+  window.addEventListener('scroll', updateProviderDropdownPosition, true)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+  window.removeEventListener('resize', updateProviderDropdownPosition)
+  window.removeEventListener('scroll', updateProviderDropdownPosition, true)
+})
 
 // Auto-select first provider when list changes
 watch(() => store.providers, (list) => {
@@ -389,8 +427,15 @@ watch(selectedProviderId, async () => {
             <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+      </div>
+      <teleport to="body">
         <transition name="dropdown-fade">
-          <div v-if="providerDropdownOpen" class="dropdown-panel">
+          <div
+            v-if="providerDropdownOpen"
+            ref="dropdownPanelRef"
+            class="dropdown-panel dropdown-panel--floating"
+            :style="providerDropdownStyle"
+          >
             <button
               v-for="p in store.providers"
               :key="p.id"
@@ -408,7 +453,7 @@ watch(selectedProviderId, async () => {
             </button>
           </div>
         </transition>
-      </div>
+      </teleport>
 
       <div class="button-group">
         <button
@@ -683,7 +728,7 @@ watch(selectedProviderId, async () => {
 <style scoped>
 .page--quota {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .quota-stage__grid {
@@ -707,6 +752,8 @@ watch(selectedProviderId, async () => {
 }
 
 .quota-controls {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -850,6 +897,7 @@ watch(selectedProviderId, async () => {
 
 .provider-dropdown {
   position: relative;
+  z-index: 31;
   min-width: 240px;
 }
 
@@ -911,10 +959,15 @@ watch(selectedProviderId, async () => {
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
-  z-index: 100;
+  z-index: 1000;
   max-height: 280px;
   overflow-y: auto;
   opacity: 1;
+}
+
+.dropdown-panel--floating {
+  right: auto;
+  z-index: 3000;
 }
 
 .dropdown-item {

@@ -6,6 +6,7 @@ import { useConsoleStore } from '@/stores/console'
 import { getDrivers } from '@/api/storage'
 import { getAria2Status } from '@/api/task'
 import { getSystemMetrics } from '@/api/system'
+import brandMark from '@/assets/openbridge-mark.svg'
 
 const router = useRouter()
 const store = useConsoleStore()
@@ -16,6 +17,11 @@ const networkDownload = ref('—')
 const networkUpload = ref('—')
 const aria2Bandwidth = ref('')
 let statusTimer: ReturnType<typeof setInterval> | null = null
+const BANDWIDTH_REFRESH_INTERVAL_MS = 1000
+const OPENLIST_CHECK_INTERVAL_MS = 10000
+let bandwidthRefreshInFlight = false
+let openListCheckInFlight = false
+let lastOpenListCheckAt = 0
 
 const THEME_KEY = 'openbridge_theme'
 const isDark = ref(localStorage.getItem(THEME_KEY) === 'dark')
@@ -49,16 +55,23 @@ function formatBytes(bytes: number): string {
 }
 
 async function checkOpenList() {
+  if (openListCheckInFlight) return
+  openListCheckInFlight = true
   try {
     // 随便发个请求给 OpenList，只要后端回包就算已连接
     await getDrivers()
     openListStatus.value = store.isLoggedIn ? 'connected' : 'disconnected'
   } catch {
     openListStatus.value = 'disconnected'
+  } finally {
+    lastOpenListCheckAt = Date.now()
+    openListCheckInFlight = false
   }
 }
 
 async function refreshBandwidth() {
+  if (bandwidthRefreshInFlight) return
+  bandwidthRefreshInFlight = true
   try {
     const [systemRes, aria2Res] = await Promise.allSettled([
       getSystemMetrics(),
@@ -86,6 +99,8 @@ async function refreshBandwidth() {
     networkDownload.value = '—'
     networkUpload.value = '—'
     aria2Bandwidth.value = ''
+  } finally {
+    bandwidthRefreshInFlight = false
   }
 }
 
@@ -96,9 +111,11 @@ onMounted(() => {
   void checkOpenList()
   void refreshBandwidth()
   statusTimer = setInterval(() => {
-    void checkOpenList()
+    if (Date.now() - lastOpenListCheckAt >= OPENLIST_CHECK_INTERVAL_MS) {
+      void checkOpenList()
+    }
     void refreshBandwidth()
-  }, 10000)
+  }, BANDWIDTH_REFRESH_INTERVAL_MS)
 })
 
 onUnmounted(() => {
@@ -117,6 +134,7 @@ onUnmounted(() => {
         <span></span>
         <span></span>
       </button>
+      <img class="topbar__brand-mark" :src="brandMark" alt="" />
       <div>
         <p class="topbar__eyebrow">{{ t('topbar.title') }}</p>
         <h1 class="topbar__title">
@@ -181,6 +199,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.topbar__brand-mark {
+  width: 34px;
+  height: 34px;
+  padding: 4px;
+  border-radius: 11px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.09);
 }
 
 /* Hamburger — visible only on mobile */
@@ -334,6 +362,9 @@ onUnmounted(() => {
   background: #1a2a42;
   border-bottom-color: rgba(255,255,255,0.08);
 }
+[data-theme="dark"] .topbar__brand-mark {
+  background: rgba(255, 255, 255, 0.9);
+}
 [data-theme="dark"] .topbar__eyebrow {
   color: #5bc0be;
 }
@@ -375,6 +406,12 @@ onUnmounted(() => {
   .topbar__left {
     min-width: 0;
     overflow: hidden;
+  }
+
+  .topbar__brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
   }
 
   .topbar__left .topbar__eyebrow {

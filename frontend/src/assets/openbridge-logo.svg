@@ -1,0 +1,49 @@
+<svg width="1600" height="820" viewBox="0 0 1600 820" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenBridge">
+  <defs>
+    <linearGradient id="ob-logo-gradient" x1="120" y1="120" x2="1480" y2="700" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4B1D95"/>
+      <stop offset="0.48" stop-color="#B21E8E"/>
+      <stop offset="1" stop-color="#E3343F"/>
+    </linearGradient>
+    <filter id="ob-logo-glow" x="-8%" y="-10%" width="116%" height="125%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#B21E8E" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#ob-logo-glow)" stroke="url(#ob-logo-gradient)" stroke-width="42" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M110 420H310V300"/>
+    <path d="M110 377C220 368 290 312 334 190"/>
+    <path d="M296 420H426"/>
+    <path d="M250 112H382"/>
+    <path d="M296 112V560H382"/>
+
+    <path d="M1490 420H1290V300"/>
+    <path d="M1490 377C1380 368 1310 312 1266 190"/>
+    <path d="M1304 420H1174"/>
+    <path d="M1350 112H1218"/>
+    <path d="M1304 112V560H1218"/>
+  </g>
+
+  <g filter="url(#ob-logo-glow)" stroke="url(#ob-logo-gradient)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M420 420H520"/>
+    <path d="M1080 420H1180"/>
+    <path d="M520 420C510 300 600 245 715 278C760 188 910 184 967 296C1052 300 1105 360 1105 435C1105 518 1045 573 955 573H830"/>
+    <path d="M520 420C432 420 386 480 386 548C386 618 444 665 530 665H666"/>
+    <path d="M726 543V690"/>
+    <path d="M805 470V625"/>
+    <path d="M650 554V625"/>
+  </g>
+
+  <g fill="url(#ob-logo-gradient)">
+    <circle cx="726" cy="538" r="31"/>
+    <circle cx="726" cy="700" r="31"/>
+    <circle cx="805" cy="468" r="31"/>
+    <circle cx="805" cy="636" r="31"/>
+    <circle cx="650" cy="552" r="31"/>
+  </g>
+
+  <text x="800" y="790" text-anchor="middle"
+    font-family="Montserrat, Poppins, Arial, sans-serif"
+    font-size="154" font-weight="900" letter-spacing="8"
+    fill="url(#ob-logo-gradient)">OPENBRIDGE</text>
+</svg>

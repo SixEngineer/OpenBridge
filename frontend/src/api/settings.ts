@@ -4,6 +4,7 @@ import endpoints from './endpoints'
 
 export interface SettingsInfo {
   openlist_base_url: string
+  app_version: string
   aria2_rpc_url: string
   aria2_path: string
   aria2_auto_start: boolean

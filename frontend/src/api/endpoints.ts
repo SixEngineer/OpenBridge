@@ -28,6 +28,10 @@ const endpoints = {
   storageDriverInfo: '/storage/driverInfo',
   storageFiles: '/storage/files',
   storageFile: '/storage/file',
+  storageRemove: '/storage/files/remove',
+  storageCopy: '/storage/files/copy',
+  storageMove: '/storage/files/move',
+  storageRename: '/storage/file/rename',
 
   // ── System ──
   systemPickPath: '/system/pick-path',
@@ -40,6 +44,9 @@ const endpoints = {
   downloadResolve: '/download/resolve',
   downloadFolderZip: '/download/folder-zip',
   downloadTaskDetail: (taskId: string) => `/download/tasks/${taskId}` as const,
+  downloadTaskStop: (taskId: string) => `/download/tasks/${taskId}/stop` as const,
+  downloadTasksStop: '/download/tasks/stop',
+  downloadTaskDeleteFile: (taskId: string) => `/download/tasks/${taskId}/delete-file` as const,
   downloadTaskRetry: (taskId: string) => `/download/tasks/${taskId}/retry` as const,
   downloadTaskOpen: (taskId: string) => `/download/tasks/${taskId}/open` as const,
   downloadTaskOpenLocation: (taskId: string) => `/download/tasks/${taskId}/open-location` as const,

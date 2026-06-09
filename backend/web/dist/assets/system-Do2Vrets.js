@@ -1,1 +1,0 @@
-import{X as t,Y as s}from"./index-CiROpYzo.js";function i(e){return t.post(s.systemPickPath,e)}function n(){return t.get(s.systemMetrics)}function o(){return t.post(s.systemRestart)}function a(){return t.post(s.systemExit)}export{a as e,n as g,i as p,o as r};

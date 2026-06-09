@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
 import type { NavItem } from '@/types/common'
+import brandMark from '@/assets/openbridge-mark.svg'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -53,7 +54,7 @@ onBeforeUnmount(() => {
   <aside class="sidebar" :class="{ 'sidebar--open': store.sidebarOpen }">
     <div>
       <router-link to="/" class="brand" @click="closeOnNav">
-        <span class="brand__mark">OB</span>
+        <img class="brand__mark" :src="brandMark" alt="" />
         <div>
           <p class="brand__title">{{ t('app.name') }}</p>
           <p class="brand__subtitle">{{ t('app.tagline') }}</p>

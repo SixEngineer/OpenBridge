@@ -138,121 +138,122 @@ function handleSubmit() {
     data.account_id = localPath.value
   }
   emit('submit', data)
-  handleClose()
 }
 </script>
 
 <template>
-  <div v-if="visible" class="dialog-overlay" @mousedown.self="handleClose">
-    <div class="dialog">
-      <div class="dialog__header">
-        <h3>{{ provider ? t('provider_form.title_edit') : t('provider_form.title_add') }}</h3>
-        <button class="dialog__close" @click="handleClose">&times;</button>
-      </div>
-
-      <div class="dialog__body">
-        <div class="form-group">
-          <label>{{ t('provider_form.name') }}</label>
-          <input v-model="formData.name" type="text" :placeholder="t('provider_form.name_placeholder')" />
+  <teleport to="body">
+    <div v-if="visible" class="dialog-overlay" @mousedown.self="handleClose">
+      <div class="dialog">
+        <div class="dialog__header">
+          <h3>{{ provider ? t('provider_form.title_edit') : t('provider_form.title_add') }}</h3>
+          <button class="dialog__close" @click="handleClose">&times;</button>
         </div>
 
-        <div class="form-group">
-          <label>{{ t('provider_form.backend_type') }}</label>
-          <div ref="dropdownRef" class="cdropdown">
-            <button
-              class="cdropdown__trigger"
-              :class="{ 'cdropdown__trigger--open': netDiskOpen }"
-              type="button"
-              @click.prevent="toggleNetDisk"
-            >
-              <span class="provider-type-tag" :class="`provider-type-tag--${formData.net_disk}`">
-                {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.labelKey || '') }}
-              </span>
-              <svg class="cdropdown__arrow" :class="{ 'cdropdown__arrow--open': netDiskOpen }" width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <transition name="fade">
-              <div v-if="netDiskOpen" class="cdropdown__panel">
-                <button
-                  v-for="opt in netDiskOptions"
-                  :key="opt.value"
-                  class="cdropdown__item"
-                  :class="{ 'cdropdown__item--active': formData.net_disk === opt.value }"
-                  type="button"
-                  @click.prevent="selectNetDisk(opt.value)"
-                >
-                  <span class="provider-type-tag" :class="`provider-type-tag--${opt.value}`">
-                    {{ t(opt.labelKey) }}
-                  </span>
-                  <span class="cdropdown__item-desc">{{ t(opt.descKey) }}</span>
-                </button>
-              </div>
-            </transition>
+        <div class="dialog__body">
+          <div class="form-group">
+            <label>{{ t('provider_form.name') }}</label>
+            <input v-model="formData.name" type="text" :placeholder="t('provider_form.name_placeholder')" />
           </div>
-          <small class="type-hint">
-            {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.descKey || '') }}
-          </small>
-        </div>
 
-        <!-- Local storage path -->
-        <div v-if="formData.net_disk === 'local'" class="form-group">
-          <label>{{ t('provider_form.local_path') }}</label>
-          <LocalPathInput
-            v-model="localPath"
-            mode="directory"
-            :placeholder="t('provider_form.local_path_placeholder')"
-            :title="t('provider_form.local_path')"
-          />
-          <small v-html="t('provider_form.local_path_hint')"></small>
-        </div>
-
-        <!-- Baidu access token -->
-        <div v-if="formData.net_disk === 'baidu'" class="form-group">
-          <label>{{ t('provider_form.baidu_token') }}</label>
-          <div class="token-input-row">
-            <input v-model="formData.access_token" type="password" :placeholder="t('provider_form.baidu_token_placeholder')" />
-            <a href="https://api.oplist.org" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_token') }}</a>
+          <div class="form-group">
+            <label>{{ t('provider_form.backend_type') }}</label>
+            <div ref="dropdownRef" class="cdropdown">
+              <button
+                class="cdropdown__trigger"
+                :class="{ 'cdropdown__trigger--open': netDiskOpen }"
+                type="button"
+                @click.prevent="toggleNetDisk"
+              >
+                <span class="provider-type-tag" :class="`provider-type-tag--${formData.net_disk}`">
+                  {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.labelKey || '') }}
+                </span>
+                <svg class="cdropdown__arrow" :class="{ 'cdropdown__arrow--open': netDiskOpen }" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <transition name="fade">
+                <div v-if="netDiskOpen" class="cdropdown__panel">
+                  <button
+                    v-for="opt in netDiskOptions"
+                    :key="opt.value"
+                    class="cdropdown__item"
+                    :class="{ 'cdropdown__item--active': formData.net_disk === opt.value }"
+                    type="button"
+                    @click.prevent="selectNetDisk(opt.value)"
+                  >
+                    <span class="provider-type-tag" :class="`provider-type-tag--${opt.value}`">
+                      {{ t(opt.labelKey) }}
+                    </span>
+                    <span class="cdropdown__item-desc">{{ t(opt.descKey) }}</span>
+                  </button>
+                </div>
+              </transition>
+            </div>
+            <small class="type-hint">
+              {{ t(netDiskOptions.find(o => o.value === formData.net_disk)?.descKey || '') }}
+            </small>
           </div>
-          <small v-html="t('provider_form.baidu_token_hint')"></small>
-        </div>
 
-        <!-- Quark cookie -->
-        <div v-if="formData.net_disk === 'quark'" class="form-group">
-          <label>{{ t('provider_form.quark_cookie') }}</label>
-          <div class="token-input-row">
-            <input v-model="formData.auth_cookie" type="password" :placeholder="t('provider_form.quark_cookie_placeholder')" />
-            <a href="https://pan.quark.cn" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_cookie') }}</a>
+          <!-- Local storage path -->
+          <div v-if="formData.net_disk === 'local'" class="form-group">
+            <label>{{ t('provider_form.local_path') }}</label>
+            <LocalPathInput
+              v-model="localPath"
+              mode="directory"
+              :placeholder="t('provider_form.local_path_placeholder')"
+              :title="t('provider_form.local_path')"
+            />
+            <small v-html="t('provider_form.local_path_hint')"></small>
           </div>
-          <small v-html="t('provider_form.quark_cookie_hint')"></small>
+
+          <!-- Baidu access token -->
+          <div v-if="formData.net_disk === 'baidu'" class="form-group">
+            <label>{{ t('provider_form.baidu_token') }}</label>
+            <div class="token-input-row">
+              <input v-model="formData.access_token" type="password" :placeholder="t('provider_form.baidu_token_placeholder')" />
+              <a href="https://api.oplist.org" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_token') }}</a>
+            </div>
+            <small v-html="t('provider_form.baidu_token_hint')"></small>
+          </div>
+
+          <!-- Quark cookie -->
+          <div v-if="formData.net_disk === 'quark'" class="form-group">
+            <label>{{ t('provider_form.quark_cookie') }}</label>
+            <div class="token-input-row">
+              <input v-model="formData.auth_cookie" type="password" :placeholder="t('provider_form.quark_cookie_placeholder')" />
+              <a href="https://pan.quark.cn" target="_blank" class="btn btn--sm btn--link">{{ t('provider_form.get_cookie') }}</a>
+            </div>
+            <small v-html="t('provider_form.quark_cookie_hint')"></small>
+          </div>
+
+          <div v-if="provider" class="form-group">
+            <label>{{ t('provider_form.status') }}</label>
+            <select v-model="formData.status">
+              <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                {{ t(opt.labelKey) }}
+              </option>
+            </select>
+          </div>
+
+          <div class="notice">
+            <strong>{{ t('provider_form.about_quota') }}</strong>
+            <p v-if="formData.net_disk === 'baidu'" v-html="t('provider_form.baidu_notice')"></p>
+            <p v-else-if="formData.net_disk === 'quark'" v-html="t('provider_form.quark_notice')"></p>
+            <p v-else-if="formData.net_disk === 'local'" v-html="t('provider_form.local_notice')"></p>
+            <p v-else v-html="t('provider_form.generic_notice')"></p>
+          </div>
         </div>
 
-<div v-if="provider" class="form-group">
-          <label>{{ t('provider_form.status') }}</label>
-          <select v-model="formData.status">
-            <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-              {{ t(opt.labelKey) }}
-            </option>
-          </select>
+        <div class="dialog__footer">
+          <button class="btn btn--secondary" @click="handleClose">{{ t('provider_form.cancel') }}</button>
+          <button class="btn btn--primary" @click="handleSubmit">
+            {{ provider ? t('provider_form.save') : t('provider_form.register') }}
+          </button>
         </div>
-
-        <div class="notice">
-          <strong>{{ t('provider_form.about_quota') }}</strong>
-          <p v-if="formData.net_disk === 'baidu'" v-html="t('provider_form.baidu_notice')"></p>
-          <p v-else-if="formData.net_disk === 'quark'" v-html="t('provider_form.quark_notice')"></p>
-          <p v-else-if="formData.net_disk === 'local'" v-html="t('provider_form.local_notice')"></p>
-          <p v-else v-html="t('provider_form.generic_notice')"></p>
-        </div>
-      </div>
-
-      <div class="dialog__footer">
-        <button class="btn btn--secondary" @click="handleClose">{{ t('provider_form.cancel') }}</button>
-        <button class="btn btn--primary" @click="handleSubmit">
-          {{ provider ? t('provider_form.save') : t('provider_form.register') }}
-        </button>
       </div>
     </div>
-  </div>
+  </teleport>
 </template>
 
 <style scoped>

@@ -1,0 +1,42 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenBridge">
+  <defs>
+    <linearGradient id="ob-mark-gradient" x1="24" y1="40" x2="232" y2="216" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4B1D95"/>
+      <stop offset="0.48" stop-color="#A21CAF"/>
+      <stop offset="1" stop-color="#E11D48"/>
+    </linearGradient>
+    <filter id="ob-mark-glow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#A21CAF" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#ob-mark-glow)" stroke="url(#ob-mark-gradient)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M26 151H79V111"/>
+    <path d="M26 139C58 136 78 119 91 82"/>
+    <path d="M83 151H107"/>
+    <path d="M72 65H102"/>
+    <path d="M83 65V193H102"/>
+
+    <path d="M230 151H177V111"/>
+    <path d="M230 139C198 136 178 119 165 82"/>
+    <path d="M173 151H149"/>
+    <path d="M184 65H154"/>
+    <path d="M173 65V193H154"/>
+
+    <path d="M88 151H99"/>
+    <path d="M157 151H168"/>
+    <path d="M99 151C97 128 113 111 135 116C143 98 174 97 184 119C200 120 210 131 210 147C210 165 198 176 181 176H158"/>
+    <path d="M99 151C83 151 74 162 74 176C74 190 85 199 101 199H122"/>
+    <path d="M128 178V217"/>
+    <path d="M151 159V199"/>
+    <path d="M106 181V199"/>
+  </g>
+
+  <g fill="url(#ob-mark-gradient)">
+    <circle cx="128" cy="176" r="11"/>
+    <circle cx="128" cy="220" r="11"/>
+    <circle cx="151" cy="157" r="11"/>
+    <circle cx="151" cy="202" r="11"/>
+    <circle cx="106" cy="179" r="11"/>
+  </g>
+</svg>

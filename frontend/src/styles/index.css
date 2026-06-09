@@ -169,12 +169,11 @@ input {
 .brand__mark {
   width: 48px;
   height: 48px;
-  display: grid;
-  place-items: center;
   border-radius: 14px;
-  background: linear-gradient(135deg, #4ab1a5 0%, #d6c47b 100%);
-  color: #102733;
-  font-weight: 800;
+  padding: 6px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16);
 }
 
 .brand__title,

@@ -3,11 +3,15 @@ package usecase
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,33 +94,144 @@ func (u *DownloadUseCase) GetTask(taskID string) (*entity.DownloadTask, error) {
 	if err != nil {
 		return nil, err
 	}
+	if task.Status == "deleted" {
+		return task, nil
+	}
 
 	if status, err := u.aria2Client.TellStatus(task.Aria2GID); err == nil {
-		task.Status = status["status"].(string)
-		if task.Status == "complete" && task.FinishedAt == nil {
-			now := time.Now()
-			task.FinishedAt = &now
-		}
-		// persist actual file path when task completes, so aria2 forgetting it later doesn't matter
-		if task.Status == "complete" && task.FilePath == "" {
-			if fp := extractFilePath(status); fp != "" {
-				task.FilePath = fp
-			}
-		}
+		u.applyAria2Status(task, status)
 		u.downloadRepo.UpdateTask(task)
 	} else if strings.Contains(err.Error(), "not found") && task.Status != "complete" {
 		// GID not found in aria2 -> task was removed or expired -> mark as error.
-		task.Status = "error"
+		if task.Status != "stopped" {
+			task.Status = "error"
+		}
 		u.downloadRepo.UpdateTask(task)
 	} // Network errors (aria2 unreachable) or already complete: keep current DB status.
 
 	return task, nil
 }
 
+func (u *DownloadUseCase) StopTask(taskID string) (*entity.DownloadTask, error) {
+	if strings.TrimSpace(taskID) == "" {
+		return nil, errors.New("task_id empty")
+	}
+
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+		return nil, errors.New("task not found")
+	}
+	if task.Status == "complete" {
+		return task, errors.New("task already complete")
+	}
+	if task.Status == "stopped" {
+		return task, nil
+	}
+
+	if task.Aria2GID != "" {
+		if status, err := u.aria2Client.TellStatus(task.Aria2GID); err == nil {
+			u.applyAria2Status(task, status)
+			if fp := extractFilePath(status); fp != "" {
+				task.FilePath = fp
+			}
+		}
+		if _, err := u.aria2Client.Remove(task.Aria2GID); err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
+			return task, err
+		}
+	}
+
+	now := time.Now()
+	task.Status = "stopped"
+	task.ErrorMessage = "stopped by user"
+	task.UpdatedAt = now
+	if task.FinishedAt == nil {
+		task.FinishedAt = &now
+	}
+	if err := u.downloadRepo.UpdateTask(task); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+type StopTasksResult struct {
+	Tasks  []*entity.DownloadTask `json:"tasks"`
+	Failed map[string]string      `json:"failed"`
+}
+
+func (u *DownloadUseCase) StopTasks(taskIDs []string) StopTasksResult {
+	result := StopTasksResult{
+		Tasks:  []*entity.DownloadTask{},
+		Failed: map[string]string{},
+	}
+	for _, taskID := range taskIDs {
+		taskID = strings.TrimSpace(taskID)
+		if taskID == "" {
+			continue
+		}
+		task, err := u.StopTask(taskID)
+		if err != nil {
+			result.Failed[taskID] = err.Error()
+			if task != nil {
+				result.Tasks = append(result.Tasks, task)
+			}
+			continue
+		}
+		result.Tasks = append(result.Tasks, task)
+	}
+	return result
+}
+
+func (u *DownloadUseCase) DeleteTaskFile(taskID string) (*entity.DownloadTask, string, error) {
+	if strings.TrimSpace(taskID) == "" {
+		return nil, "", errors.New("task_id empty")
+	}
+
+	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
+	if err != nil {
+		return nil, "", errors.New("task not found")
+	}
+	if isActiveDownloadStatus(task.Status) {
+		return task, "", errors.New("stop task before deleting file")
+	}
+
+	filePath, err := u.getActualFilePath(task)
+	if err != nil {
+		return task, "", err
+	}
+
+	info, err := os.Stat(filePath)
+	if err == nil {
+		if info.IsDir() {
+			return task, filePath, errors.New("refuse to delete directory")
+		}
+		if err := os.Remove(filePath); err != nil {
+			return task, filePath, err
+		}
+		// Remove aria2 control file for stopped/partial downloads if it exists.
+		_ = os.Remove(filePath + ".aria2")
+	} else if !os.IsNotExist(err) {
+		return task, filePath, err
+	}
+
+	now := time.Now()
+	task.Status = "deleted"
+	task.FilePath = ""
+	task.ErrorMessage = ""
+	task.Progress = 0
+	task.UpdatedAt = now
+	if err := u.downloadRepo.UpdateTask(task); err != nil {
+		return nil, filePath, err
+	}
+	return task, filePath, nil
+}
+
 func (u *DownloadUseCase) RetryTask(deviceID string, taskID string) (*entity.DownloadTask, error) {
 	task, err := u.downloadRepo.GetTaskByTaskID(taskID)
 	if err != nil {
 		return nil, errors.New("task not found")
+	}
+	if !isRetryableDownloadStatus(task.Status) {
+		return nil, errors.New("only stopped or failed tasks can be retried")
 	}
 
 	directLink, err := u.storageUseCase.ResolveDirectLinkForDevice(deviceID, task.SourcePath)
@@ -156,6 +271,107 @@ func (u *DownloadUseCase) RetryTask(deviceID string, taskID string) (*entity.Dow
 		return nil, err
 	}
 	return task, nil
+}
+
+func isRetryableDownloadStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "error", "failed", "stopped", "cancelled", "canceled", "removed":
+		return true
+	default:
+		return false
+	}
+}
+
+func isActiveDownloadStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "waiting", "active", "paused", "submitted", "downloading":
+		return true
+	default:
+		return false
+	}
+}
+
+func (u *DownloadUseCase) applyAria2Status(task *entity.DownloadTask, status map[string]interface{}) {
+	now := time.Now()
+	if ariaStatus := stringFromAria2(status, "status"); ariaStatus != "" {
+		if ariaStatus == "removed" {
+			ariaStatus = "stopped"
+		}
+		task.Status = ariaStatus
+	}
+
+	task.CompletedLength = intFromAria2(status, "completedLength")
+	task.TotalLength = intFromAria2(status, "totalLength")
+	task.DownloadSpeed = intFromAria2(status, "downloadSpeed")
+	if task.TotalLength <= 0 && task.FileSize > 0 {
+		task.TotalLength = task.FileSize
+	}
+
+	if task.TotalLength > 0 && task.CompletedLength > 0 {
+		task.Progress = math.Round(float64(task.CompletedLength)/float64(task.TotalLength)*10000) / 100
+		if task.Status != "complete" && task.Progress >= 100 {
+			task.Progress = 99.99
+		}
+	}
+	if task.Status == "complete" {
+		task.Progress = 100
+		if task.CompletedLength <= 0 && task.TotalLength > 0 {
+			task.CompletedLength = task.TotalLength
+		}
+		if task.FinishedAt == nil {
+			task.FinishedAt = &now
+		}
+	}
+	if (task.Status == "active" || task.Status == "waiting") && task.StartedAt == nil {
+		task.StartedAt = &now
+	}
+	if task.Status == "error" {
+		if message := stringFromAria2(status, "errorMessage"); message != "" {
+			task.ErrorMessage = message
+		}
+	}
+	if task.Status == "complete" && task.FilePath == "" {
+		if fp := extractFilePath(status); fp != "" {
+			task.FilePath = fp
+		}
+	}
+	task.UpdatedAt = now
+}
+
+func stringFromAria2(status map[string]interface{}, key string) string {
+	value, ok := status[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
+}
+
+func intFromAria2(status map[string]interface{}, key string) int64 {
+	value, ok := status[key]
+	if !ok || value == nil {
+		return 0
+	}
+	switch v := value.(type) {
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		return n
+	case float64:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	default:
+		return 0
+	}
 }
 
 func (u *DownloadUseCase) getActualFilePath(task *entity.DownloadTask) (string, error) {

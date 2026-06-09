@@ -1,1 +1,0 @@
-import{X as t,Y as r}from"./index-CiROpYzo.js";function g(){return t.get(r.storageDrivers,{params:{_t:Date.now()}})}function u(a,e){return t.get(r.storageFiles,{params:{...a,_t:Date.now()},timeout:e==null?void 0:e.timeout})}export{u as a,g};
