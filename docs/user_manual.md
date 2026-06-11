@@ -10,7 +10,7 @@
 
 本文档说明 OpenBridge 的各项前端功能、常见使用方式和后端 API，并已按章节插入截图；少数不适合展示的步骤以文字说明为主。
 
-适用版本：v1.2
+适用版本：v1.3
 
 ## 目录
 
@@ -36,6 +36,7 @@
 OpenBridge 是一个面向 OpenList 的下载编排控制台。它主要用于：
 
 - 统一查看 OpenList 文件。
+- 在 OpenList 文件页执行删除、重命名、复制、剪切和查看详情等基础文件管理操作。
 - 管理服务商账号和本地存储。
 - 创建 Mount 挂载点并查看真实或虚拟配额。
 - 将文件提交到服务端 aria2 下载。
@@ -113,10 +114,19 @@ OpenBridge 会为每台浏览器设备生成本地设备 ID，并通过 `X-OpenB
 
 ```env
 OPENLIST_BASE_URL=http://127.0.0.1:5244
+APP_VERSION=v1.3
 ARIA2_RPC_URL=http://127.0.0.1:6800/jsonrpc
 ARIA2_PATH=
 RCLONE_PATH=
 ```
+
+配置说明：
+
+- `OPENLIST_BASE_URL`：OpenBridge 连接的 OpenList 地址。
+- `APP_VERSION`：全局版本号，设置页底部会显示该版本。
+- `ARIA2_RPC_URL`：aria2 JSON-RPC 地址。
+- `ARIA2_PATH`：aria2c 可执行文件路径，可在设置页选择。
+- `RCLONE_PATH`：rclone 可执行文件路径，可在设置页选择。
 
 
 ![`.env` 配置文件](screenshots/user_manual/03-env.png)
@@ -341,6 +351,7 @@ http://localhost:<OpenBridge端口>
 
 文件列表列包含：
 
+- 复选框
 - 名称
 - 大小
 - 修改时间
@@ -349,15 +360,70 @@ http://localhost:<OpenBridge端口>
 交互说明：
 
 - 点击目录行：进入目录。
-- 点击文件行：选中或查看该行。
+- 点击文件行：保持当前目录，可使用复选框或右侧操作按钮处理该文件。
+- 表头复选框：全选或取消全选当前页文件。
+- 行复选框：选中或取消选中单个文件或目录。
 - 点击“名称”表头：按名称升序或降序排序。
 - 点击“大小”表头：按大小升序或降序排序。
 - 点击“修改时间”表头：按修改时间升序或降序排序。
+- 文件较多时，前端会自动按分页继续加载，避免只显示前 50 个文件。
+
+文件类型图标说明：
+
+- `DIR`：文件夹。
+- `IMG`：图片文件，例如 jpg、png、webp、svg。
+- `VID`：视频文件，例如 mp4、mkv、avi。
+- `AUD`：音频文件，例如 mp3、flac、wav。
+- `ZIP`：压缩包，例如 zip、rar、7z、tar。
+- `PDF`：PDF 文件。
+- `DOC`：Office 文档，例如 docx、xlsx、pptx。
+- `DEV`：代码或文本类开发文件，例如 go、ts、vue、json、md。
+- `FILE`：其他普通文件。
 
 
 ![文件列表排序](screenshots/user_manual/17-openlist-sort.png)
 
-### 6.3 下载文件或文件夹
+### 6.3 文件选择与批量操作
+
+文件列表上方会显示批量操作工具栏。
+
+工具栏按钮说明：
+
+- `已选择 N 项`：显示当前选中文件或目录数量。
+- `复制`：把当前选中的文件或目录加入复制剪贴板。
+- `剪切`：把当前选中的文件或目录加入移动剪贴板。
+- `粘贴到此处`：把剪贴板中的文件复制或移动到当前目录。
+- `重命名`：仅选择 1 个项目时可用，输入新名称后提交到 OpenList。
+- `详细信息`：仅选择 1 个项目时可用，读取并展示文件详情。
+- `删除`：删除当前选中的文件或目录。
+
+使用复制或剪切时，先在源目录勾选文件，再点击 `复制` 或 `剪切`，然后进入目标目录并点击 `粘贴到此处`。剪切成功后剪贴板会自动清空；复制成功后仍可继续粘贴到其他目录。
+
+删除操作会直接调用 OpenList 删除接口，属于真实删除，不是只从 OpenBridge 列表中隐藏。执行前页面会弹出确认提示。
+
+![文件批量操作](screenshots/user_manual/21-openlist-file-actions.png)
+
+### 6.4 文件详情与行内操作
+
+文件行右侧提供快捷按钮：
+
+- `i`：打开详细信息面板。
+- `R`：重命名该文件或目录。
+- `下载 / 下载文件夹`：打开下载确认弹窗。
+
+详细信息面板展示：
+
+- 名称
+- 类型
+- 大小
+- 修改时间
+- 创建时间
+- Provider
+- OpenBridge 当前可见路径
+
+![文件详情](screenshots/user_manual/23-openlist-file-details.png)
+
+### 6.5 下载文件或文件夹
 
 文件和目录行右侧会显示下载按钮。
 
@@ -488,6 +554,9 @@ http://localhost:<OpenBridge端口>
 - 全部
 - 等待中
 - 下载中
+- 已暂停
+- 已停止
+- 文件已删除
 - 失败
 - 已完成
 
@@ -509,6 +578,7 @@ http://localhost:<OpenBridge端口>
 - 行内删除图标：清除该条任务记录。
 
 注意：清除记录只影响前端记录和本地任务列表，不等同于删除已经下载到磁盘上的文件。
+如需删除已经下载到服务端电脑磁盘上的文件，请使用任务行或任务详情中的 `删除文件` 操作。
 
 
 ![清除任务记录](screenshots/user_manual/30-task-clear.png)
@@ -533,11 +603,22 @@ http://localhost:<OpenBridge端口>
 
 - `在电脑上打开文件`：在运行 OpenBridge 的电脑上打开已下载文件。
 - `在电脑上显示所在文件夹`：打开文件所在目录并定位。
-- `重试下载`：失败任务重新解析直链并提交 aria2。
+- `停止下载`：停止等待中、下载中或暂停中的 aria2 任务。
+- `删除文件`：删除该任务已经下载到服务端电脑磁盘上的文件，但保留任务记录。
+- `清除记录`：只清除任务记录，不删除磁盘文件。
+- `重试下载`：失败或已停止任务会重新解析直链并提交 aria2。
 - 行点击：打开右侧或下方任务详情。
+
+进度显示说明：
+
+- 优先展示 aria2 返回的 `CompletedLength / TotalLength`。
+- 当 aria2 暂时没有返回完整进度时，会结合当前下载速度做进度预测。
+- 下载速度按 aria2 当前速度显示，活跃任务默认每秒刷新一次。
 
 
 ![任务行操作](screenshots/user_manual/32-task-row-actions.png)
+
+![任务停止删除和进度](screenshots/user_manual/32b-task-stop-delete-progress.png)
 
 ### 8.7 任务详情
 
@@ -550,6 +631,9 @@ http://localhost:<OpenBridge端口>
 - aria2 GID
 - 状态
 - 进度
+- 已下载大小
+- 总大小
+- 当前下载速度
 - 重试次数
 - 错误信息
 - 直链
@@ -561,19 +645,24 @@ http://localhost:<OpenBridge端口>
 按钮说明：
 
 - `关闭`：关闭任务详情。
-- `重试下载`：重新提交失败任务。
+- `停止下载`：停止仍在等待、下载或暂停的任务。
+- `删除文件`：删除该任务对应的服务端本地文件，并把任务状态更新为“文件已删除”。
+- `重试下载`：重新提交失败或已停止任务。
 - `点击复制`：复制直链。
 
 
 ![任务详情](screenshots/user_manual/33-task-detail.png)
 
+![任务详情停止删除重试](screenshots/user_manual/33b-task-detail-stop-delete-retry.png)
+
 ### 8.8 自动刷新
 
-当存在等待中或下载中的任务时，页面会自动刷新。
+当存在等待中、下载中或暂停中的任务时，页面会自动刷新，默认每秒刷新一次。
 
 按钮说明：
 
 - `停止`：停止自动刷新活跃任务。
+- `停止选中`：当选中任务中存在可停止任务时出现，批量停止选中的活跃任务。
 
 
 ![自动刷新](screenshots/user_manual/34-task-auto-refresh.png)
@@ -1011,6 +1100,7 @@ Rclone 页面用于创建、编辑、删除、写入、挂载和停止本机 rcl
 - 界面动画效果：仅保存在当前设备浏览器中。
 - 启动时自动打开浏览器：写入后端配置。
 - 登录设备上限：管理员设置同一账号允许同时在线设备数。
+- 页面底部版本号：来自 `.env` 中的 `APP_VERSION`，例如 `OpenBridge v1.3`。
 
 按钮说明：
 
@@ -1089,7 +1179,43 @@ Rclone 页面用于创建、编辑、删除、写入、挂载和停止本机 rcl
 
 ![OpenList 设置](screenshots/user_manual/65-settings-openlist.png)
 
-### 12.9 重置用户数据
+### 12.9 备份与还原用户数据
+
+备份与还原功能用于迁移或保护 OpenBridge 的完整用户数据。
+
+备份内容包括：
+
+- 服务商账号数据。
+- Mount 挂载点数据。
+- 配额快照数据。
+- 下载任务记录。
+- rclone 挂载配置。
+- 设置页中的配置项，例如 OpenList Base URL、aria2 RPC、aria2 路径、rclone 路径、登录设备上限、FILETREE 缓存设置、自动打开浏览器等。
+
+字段说明：
+
+- 备份密码：可选。留空时生成未加密 JSON 备份文件。
+- 备份文件：还原时选择 OpenBridge 导出的 JSON 文件。
+- 还原密码：仅加密备份需要填写；未加密备份无需密码。
+
+按钮说明：
+
+- `导出备份`：导出全部用户数据。若填写了备份密码，导出的备份文件会加密。
+- `还原备份`：从备份文件覆盖还原当前全部用户数据，并把设置项写回 `.env`。
+
+注意：
+
+- 未设置密码的备份是明文文件，可能包含 token、cookie、OpenList 地址、aria2 配置和 rclone 配置等敏感信息。
+- 加密备份还原时必须输入创建备份时使用的密码，密码错误无法还原。
+- 还原会覆盖当前全部用户数据，执行前请确认已经保存好当前数据。
+- 设置项会写回 `.env`；端口、aria2、rclone、FILETREE 等部分运行时配置建议重启 OpenBridge 后完全生效。
+- 当前数据库路径 `DB_PATH` 不会被备份覆盖，避免还原后切换到另一个数据库文件导致数据不可见。
+- 还原完成后前端会退出当前会话，需要重新登录。
+
+
+![备份与还原用户数据](screenshots/user_manual/66-settings-backup-restore.png)
+
+### 12.10 重置用户数据
 
 重置分为两种：
 
@@ -1257,6 +1383,7 @@ X-OpenBridge-Device-ID: <device_id>
 - 注册、编辑、删除服务商
 - 创建、编辑、删除 Mount
 - 更新设置
+- 备份和还原全部用户数据
 - rclone 配置写入、挂载、停止挂载
 - 重启和退出服务
 
@@ -1331,6 +1458,47 @@ X-OpenBridge-Device-ID: <device_id>
 - `scope=current`：重置当前 OpenList 源数据。
 - `scope=all`：重置全部数据。
 
+#### POST `/user/backup`
+
+权限：管理员。
+
+用途：导出全部用户数据备份。
+
+请求体：
+
+```json
+{
+  "password": "可选备份密码"
+}
+```
+
+说明：
+
+- `password` 为空时导出未加密 JSON。
+- `password` 不为空时使用该密码加密备份内容。
+- 备份文件包含数据库用户数据和设置页对应的 `.env` 配置项。
+- 返回值是可下载的 JSON 备份文件，不使用通用响应格式。
+
+#### POST `/user/restore`
+
+权限：管理员。
+
+用途：从备份文件还原全部用户数据。
+
+请求格式：`multipart/form-data`
+
+字段：
+
+- `file`：OpenBridge 导出的 JSON 备份文件。
+- `password`：可选。加密备份必须填写创建备份时的密码，未加密备份可留空。
+
+说明：
+
+- 还原会覆盖当前数据库中的服务商、Mount、配额、下载任务和 rclone 配置。
+- 还原会把备份中的设置项写回 `.env`。
+- `DB_PATH` 不随备份覆盖。
+- 还原成功后建议重新登录；如果恢复了端口或外部工具路径，建议重启 OpenBridge。
+
 ### 15.6 Settings API
 
 #### GET `/settings`
@@ -1339,6 +1507,7 @@ X-OpenBridge-Device-ID: <device_id>
 
 返回字段：
 
+- `app_version`
 - `openlist_base_url`
 - `aria2_rpc_url`
 - `aria2_path`
@@ -1453,6 +1622,8 @@ X-OpenBridge-Device-ID: <device_id>
 - `page`：页码。
 - `per_page`：每页数量。
 
+说明：前端文件浏览器会按分页自动继续读取，直到当前目录数据读取完成或达到安全页数上限。
+
 返回数据结构：
 
 ```json
@@ -1474,6 +1645,79 @@ X-OpenBridge-Device-ID: <device_id>
 #### GET `/storage/file?path=/file.zip`
 
 用途：获取单个文件详情。
+
+#### POST `/storage/files/remove`
+
+用途：删除当前 OpenList 用户可见目录下的一个或多个文件或目录。
+
+请求体：
+
+```json
+{
+  "dir": "/movie",
+  "names": ["old-file.zip", "old-folder"]
+}
+```
+
+说明：
+
+- `dir` 是 OpenBridge 当前可见目录。
+- `names` 只能包含当前目录下的文件名或目录名，不能包含 `/` 或 `\`。
+- 该操作会调用 OpenList 删除接口，属于真实删除。
+
+#### POST `/storage/file/rename`
+
+用途：重命名单个文件或目录。
+
+请求体：
+
+```json
+{
+  "path": "/movie/file.zip",
+  "name": "new-file.zip"
+}
+```
+
+说明：`name` 只能是新文件名，不能包含路径分隔符。
+
+#### POST `/storage/files/copy`
+
+用途：把一个或多个文件或目录复制到目标目录。
+
+请求体：
+
+```json
+{
+  "src_dir": "/movie",
+  "dst_dir": "/backup/movie",
+  "names": ["file.zip", "folder-a"]
+}
+```
+
+#### POST `/storage/files/move`
+
+用途：把一个或多个文件或目录移动到目标目录，对应前端“剪切 + 粘贴到此处”。
+
+请求体：
+
+```json
+{
+  "src_dir": "/movie",
+  "dst_dir": "/archive/movie",
+  "names": ["file.zip", "folder-a"]
+}
+```
+
+返回示例：
+
+```json
+{
+  "operation": "move",
+  "dir": "/movie",
+  "dst_dir": "/archive/movie",
+  "names": ["file.zip"]
+}
+```
 
 ### 15.8 Download API
 
@@ -1539,9 +1783,69 @@ X-OpenBridge-Device-ID: <device_id>
 
 用途：查询下载任务详情。
 
+任务对象常见字段：
+
+- `TaskID`
+- `SourcePath`
+- `FileName`
+- `FileSize`
+- `FilePath`
+- `Aria2GID`
+- `Status`
+- `Progress`
+- `CompletedLength`
+- `TotalLength`
+- `DownloadSpeed`
+- `ErrorMessage`
+- `RetryCount`
+- `StartedAt`
+- `FinishedAt`
+- `CreatedAt`
+- `UpdatedAt`
+
+#### POST `/download/tasks/:id/stop`
+
+用途：停止单个 aria2 下载任务。
+
+说明：
+
+- 仅对等待中、下载中或暂停中的任务有效。
+- 成功后任务状态会更新为 `stopped`。
+
+#### POST `/download/tasks/stop`
+
+用途：批量停止多个 aria2 下载任务。
+
+请求体：
+
+```json
+{
+  "task_ids": ["task-1", "task-2"]
+}
+```
+
+返回字段：
+
+- `tasks`：成功停止并更新后的任务列表。
+- `failed`：停止失败的任务 ID 与错误信息映射。
+
+#### POST `/download/tasks/:id/delete-file`
+
+用途：删除该任务已经下载到运行 OpenBridge 的电脑上的本地文件，并保留任务记录。
+
+说明：
+
+- 适用于已完成、已停止或失败任务。
+- 成功后任务状态会更新为 `deleted`，前端显示“文件已删除”。
+
 #### POST `/download/tasks/:id/retry`
 
-用途：重试失败任务。
+用途：重试失败或已停止任务。
+
+说明：
+
+- 重试时会重新解析 OpenList 源路径的直链。
+- 成功后重新提交 aria2，任务状态回到等待中。
 
 #### POST `/download/tasks/:id/open`
 
@@ -1939,3 +2243,13 @@ OpenBridge 的 `/` 对应当前 OpenList 用户可见根目录。检查：
 ### 16.7 黑夜模式看不清
 
 可在顶部栏切换亮色和黑夜模式，也可以在设置页关闭界面动画以降低渲染压力。
+
+### 16.8 OpenList 文件删除、复制或重命名失败
+
+检查：
+
+- 当前登录的 OpenList 用户是否有对应目录的写入、删除或移动权限。
+- 当前路径是否属于该 OpenList 用户可见根目录。
+- 文件名是否包含 `/` 或 `\` 等路径分隔符。
+- OpenList Base URL 是否刚刚切换，切换后建议重新登录。
+- OpenList 后端是否支持 `/api/fs/remove`、`/api/fs/rename`、`/api/fs/copy` 和 `/api/fs/move`。

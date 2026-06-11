@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 	"openbridge/backend/internal/middleware"
 	"openbridge/backend/internal/pkg/myerror"
@@ -13,6 +14,10 @@ import (
 type UserLoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type UserBackupRequest struct {
+	Password string `json:"password"`
 }
 
 type UserHandler struct {
@@ -55,6 +60,54 @@ func (h *UserHandler) Reset(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: nil})
+}
+
+func (h *UserHandler) Backup(c *gin.Context) {
+	var req UserBackupRequest
+	if c.Request.Body != nil && c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+			return
+		}
+	}
+
+	backupBytes, filename, err := h.userUseCase.Backup(req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeBackupFailed, Message: err.Error()})
+		return
+	}
+
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	c.Data(http.StatusOK, "application/json; charset=utf-8", backupBytes)
+}
+
+func (h *UserHandler) Restore(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeJsonFormatInvalid, Message: err.Error()})
+		return
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeRestoreFailed, Message: err.Error()})
+		return
+	}
+	defer src.Close()
+
+	backupBytes, err := io.ReadAll(src)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeRestoreFailed, Message: err.Error()})
+		return
+	}
+
+	result, err := h.userUseCase.Restore(backupBytes, c.PostForm("password"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tool.HttpResult{Code: myerror.ErrorCodeRestoreFailed, Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, tool.HttpResult{Code: myerror.ErrorCodeOK, Message: myerror.SuccessMessage, Data: result})
 }
 
 // 获取用户数据

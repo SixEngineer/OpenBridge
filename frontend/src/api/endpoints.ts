@@ -64,6 +64,8 @@ const endpoints = {
   // ── User ──
   userLogin: '/user/login',
   userReset: '/user/reset',
+  userBackup: '/user/backup',
+  userRestore: '/user/restore',
   userInfo: '/user/info',
   userSessionStatus: '/user/session-status',
 
