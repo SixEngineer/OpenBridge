@@ -20,6 +20,10 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
+
     const res = response.data
     // 兼容 code: 0 和 code: 1000 都算成功
     if (res.code !== 0 && res.code !== 1000) {

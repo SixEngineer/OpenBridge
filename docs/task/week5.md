@@ -1,210 +1,67 @@
-# Week5 开发任务说明：本地 Disk Provider 支持实现
-
-## 一、任务背景
-
-在 Week4 中，系统已完成容量适配核心功能，支持：
-
-* mock provider（模拟容量）
-* 百度网盘 provider（真实容量）
-* MountPoint 三种模式（real / inherit / virtual）
-
-当前系统已经具备基础可用性
-
-因此，本周引入：
-
- **本地 Disk Provider
-
----
-
-## 二、本周目标
-
-###  核心目标
-
-实现一个新的 provider 类型：
-
-```text
-net_disk = "local"
-```
-
-并完成以下能力：
-
-1. 获取本地磁盘容量（total / used / available）
-2. 接入现有 Provider 架构（统一接口）
-3. 支持 quota 查询与 sync
-4. 支持 MountPoint real 模式
-5. 可用于前端展示与系统演示
-
----
-
-## 三、功能设计
-
-### 3.1 Local Provider 定义
-
-新增文件：
-
-```
-backend/internal/domain/providers/local_provider.go
-```
-
-实现接口：
-
-```go
-type Provider interface {
-    GetQuota(ctx context.Context, account *entity.ProviderAccount) (entity.Quota, error)
-    GetDirectLink(ctx context.Context, fileID string) (string, error)
-    RefreshToken(ctx context.Context, account *entity.ProviderAccount) error
-}
-```
-
----
-
-### 3.2 容量获取方式
-
-本地磁盘容量通过系统调用获取：
-
-#### Linux / macOS
-
-使用：
-
-```go
-syscall.Statfs
-```
-
-示例逻辑：
-
-```go
-var stat syscall.Statfs_t
-syscall.Statfs("/", &stat)
-
-total := stat.Blocks * uint64(stat.Bsize)
-available := stat.Bavail * uint64(stat.Bsize)
-used := total - available
-```
-
----
-
-### 3.3 返回结构
-
-```json
-{
-  "provider": "local",
-  "total": xxx,
-  "used": xxx,
-  "available": xxx
-}
-```
-
----
-
-### 3.4 Provider 注册
-
-在：
-
-```
-provider_usecase.go
-mount_usecase.go
-quota_usecase.go
-```
-
-中增加：
-
-```go
-case "local":
-    return providers.NewLocalProvider()
-```
-
----
-
-## 四、接口测试设计
-
-### 4.1 注册 Local Provider
-
-```bash
-curl -X POST http://localhost:8080/api/v1/provider \
--H "Content-Type: application/json" \
--d '{
-  "name": "local-provider",
-  "net_disk": "local"
-}'
-```
-
----
-
-### 4.2 同步本地容量
-
-```bash
-curl -X POST http://localhost:8080/api/v1/quota/sync \
--H "Content-Type: application/json" \
--d '{
-  "name": "local-provider"
-}'
-```
-
----
-
-### 4.3 创建 Mount（real）
-
-```bash
-curl -X POST http://localhost:8080/api/v1/mount \
--H "Content-Type: application/json" \
--d '{
-  "name": "local-root",
-  "provider_account_id": <id>,
-  "mount_path": "/local",
-  "provider_root_path": "/",
-  "quota_mode": "real"
-}'
-```
-
----
-
-### 4.4 查询 quota
-
-```bash
-curl http://localhost:8080/api/v1/mount/<id>/quota
-```
-
----
-
-## 五、预期效果
-
-| 项目         | 预期           |
-| ---------- | ------------ |
-| quota/sync | 返回本机真实磁盘容量   |
-| mount real | 使用本地磁盘作为容量来源 |
-| 稳定性        | 不依赖网络，始终可用   |
-| 演示效果       | 可展示真实磁盘占用变化  |
-
----
-
-## 六、扩展方向
-
-后续可扩展：
-
-* 指定路径（不同磁盘分区）
-* 多磁盘支持
-* 挂载目录级容量统计
-* 本地文件扫描统计 used（更精确）
-
----
-
-## 七、分工建议
-
-| 成员  | 任务                    |
-| --- | --------------------- |
-| 后端1 | 实现 local provider     |
-| 后端2 | 接入 usecase 与 registry |
-| 测试  | 编写接口测试用例              |
-| 前端  | 增加 local provider 展示  |
-
----
-
-## 九、本周验收标准
-
-满足以下条件即通过：
-
-* [ ] local provider 注册成功
-* [ ] quota/sync 返回真实磁盘容量
-* [ ] mount real 模式可正常使用
-* [ ] 无崩溃 / panic
-* [ ] 数据格式符合统一规范
+# Week 5 任务说明：OpenList 文件浏览、用户根目录与文件管理
+
+## 本周定位
+
+本周把 OpenList 文件能力接入 OpenBridge，让用户能在控制台中浏览自己可见的 OpenList 根目录，并补齐基础文件管理能力。
+
+## 本周目标
+
+- 支持按当前 OpenList 用户根目录浏览文件。
+- 支持 OpenList 文件列表分页加载，避免只显示前 50 个文件。
+- 支持文件详情读取。
+- 支持删除、重命名、复制、剪切和粘贴。
+- 支持文件类型图标和多选复选框。
+- 支持下载任务和路径输入场景复用文件选择器。
+- 引入 FILETREE 文件索引缓存。
+
+## 任务拆分
+
+### 后端
+
+- 实现 `GET /api/v1/storage/drivers`。
+- 实现 `GET /api/v1/storage/driverInfo`。
+- 实现 `GET /api/v1/storage/files`。
+- 实现 `GET /api/v1/storage/file`。
+- 实现 `POST /api/v1/storage/files/remove`。
+- 实现 `POST /api/v1/storage/file/rename`。
+- 实现 `POST /api/v1/storage/files/copy`。
+- 实现 `POST /api/v1/storage/files/move`。
+- 请求 OpenList 时携带当前设备会话对应的 OpenList 认证信息。
+- 将 OpenBridge 的 `/` 映射到当前 OpenList 用户可见根目录。
+- 对 OpenList 源和用户根目录进行路径归一化处理。
+- 删除、移动、复制、重命名后刷新 FILETREE 缓存。
+
+### 缓存
+
+- 维护 FILETREE 文件树缓存结构。
+- 支持配置缓存磁盘上限，最小 4 KB。
+- 支持配置缓存层数，范围 1 到 5。
+- 启动时读取缓存，退出或重启时写回缓存。
+- 缓存预热不得阻塞正常文件浏览。
+
+### 前端
+
+- OpenList 页面显示面包屑路径。
+- 文件列表展示名称、大小、修改时间和操作。
+- 支持按名称、大小、修改时间排序。
+- 支持自动分页加载。
+- 支持文件夹、图片、视频、音频、压缩包、PDF、Office、代码等类型图标。
+- 支持表头复选框和行复选框。
+- 支持工具栏复制、剪切、粘贴、删除、重命名、详细信息。
+- 支持行内详情和重命名按钮。
+- 支持 OpenList 路径选择器，用于下载任务源路径和其他路径输入场景。
+
+## 验收标准
+
+- 不同 OpenList 用户进入 `/openlist` 时看到自己的根目录。
+- 文件超过 50 个时前端能继续加载。
+- 删除、重命名、复制、移动操作能同步到 OpenList。
+- 文件夹可进入，文件可查看详情和发起下载。
+- 切换 OpenList Base URL 后文件浏览上下文不会串源。
+
+## 交付物
+
+- Storage API。
+- OpenList 文件浏览器。
+- OpenList 路径选择器。
+- FILETREE 缓存能力。

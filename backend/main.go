@@ -150,6 +150,8 @@ func runServer() {
 	{
 		userGroup.POST("/login", userHandler.UserLogin)
 		userGroup.DELETE("/reset", adminChecker.Middleware(), userHandler.Reset)
+		userGroup.POST("/backup", adminChecker.Middleware(), userHandler.Backup)
+		userGroup.POST("/restore", adminChecker.Middleware(), userHandler.Restore)
 		userGroup.GET("/info", userHandler.GetUserInfo)
 		userGroup.GET("/session-status", userHandler.GetSessionStatus)
 	}

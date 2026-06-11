@@ -46,6 +46,30 @@ export function userReset(scope: UserResetScope = 'all'): Promise<ApiResponse<nu
   })
 }
 
+export interface UserDataRestoreResult {
+  provider_accounts: number
+  mount_points: number
+  quota_snapshots: number
+  download_tasks: number
+  rclone_profiles: number
+  env_settings: number
+  restart_required: boolean
+}
+
+export function userBackup(password = ''): Promise<Blob> {
+  return request.post(endpoints.userBackup, { password }, {
+    responseType: 'blob',
+  }) as Promise<Blob>
+}
+
+export function userRestore(file: File, password = ''): Promise<ApiResponse<UserDataRestoreResult>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('password', password)
+
+  return request.post(endpoints.userRestore, formData)
+}
+
 // 获取当前用户信息（后端：GET /user/info → 转发 OpenList /api/me）
 export function getUserInfo(): Promise<ApiResponse<UserInfo>> {
   return request.get(endpoints.userInfo)

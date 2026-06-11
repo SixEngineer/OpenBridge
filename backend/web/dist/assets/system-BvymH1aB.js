@@ -1,1 +1,0 @@
-import{$ as t,a0 as s}from"./index-d2QKbFsp.js";function i(e){return t.post(s.systemPickPath,e)}function n(){return t.get(s.systemMetrics)}function a(){return t.post(s.systemRestart)}function o(){return t.post(s.systemExit)}export{o as e,n as g,i as p,a as r};
