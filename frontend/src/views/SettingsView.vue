@@ -5,7 +5,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import LocalPathInput from '@/components/common/LocalPathInput.vue'
 import { useI18n } from 'vue-i18n'
 import { useConsoleStore } from '@/stores/console'
-import { getUserInfo, userReset } from '@/api/user'
+import { getUserInfo, userBackup, userReset, userRestore } from '@/api/user'
 import type { UserInfo } from '@/api/user'
 import { getSettings, updateAppSettings, updateAria2Settings, updateFileTreeSettings, updateOpenListSettings, updateRcloneSettings, updateSessionSettings } from '@/api/settings'
 import { exitApplication, restartApplication } from '@/api/system'
@@ -28,7 +28,7 @@ const aria2UrlInput = ref('http://127.0.0.1:6800/jsonrpc')
 const savedAria2Url = ref('')
 const settingsLoading = ref(false)
 const settingsError = ref(false)
-const appVersion = ref('v1.2')
+const appVersion = ref('v1.3')
 const savingAria2 = ref(false)
 const aria2PathInput = ref('')
 const savedAria2Path = ref('')
@@ -93,6 +93,11 @@ const userInfoLoading = ref(false)
 const userInfoError = ref(false)
 const resettingCurrent = ref(false)
 const resettingAll = ref(false)
+const backupPasswordInput = ref('')
+const backingUpUserData = ref(false)
+const restorePasswordInput = ref('')
+const restoreFile = ref<File | null>(null)
+const restoringUserData = ref(false)
 
 async function fetchUserInfo() {
   userInfoLoading.value = true
@@ -116,7 +121,7 @@ async function fetchSettings() {
   settingsError.value = false
   try {
     const res = await getSettings()
-    appVersion.value = res.data.app_version || 'v1.2'
+    appVersion.value = res.data.app_version || 'v1.3'
     savedAria2Url.value = res.data.aria2_rpc_url || 'http://127.0.0.1:6800/jsonrpc'
     savedAria2Path.value = res.data.aria2_path || ''
     savedAria2AutoStart.value = Boolean(res.data.aria2_auto_start)
@@ -309,6 +314,68 @@ async function handleReset(scope: 'current' | 'all') {
     alert(message)
   } finally {
     pending.value = false
+  }
+}
+
+function handleRestoreFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  restoreFile.value = input.files?.[0] ?? null
+}
+
+function backupFilename() {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const now = new Date()
+  const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+  const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  return `openbridge-user-data-backup-${date}-${time}.json`
+}
+
+function saveBackupBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = backupFilename()
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function handleBackupUserData() {
+  backingUpUserData.value = true
+  try {
+    const blob = await userBackup(backupPasswordInput.value)
+    saveBackupBlob(blob)
+    alert(t('settings.backup_success'))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('settings.backup_failed')
+    alert(message)
+  } finally {
+    backingUpUserData.value = false
+  }
+}
+
+async function handleRestoreUserData() {
+  if (!restoreFile.value) {
+    alert(t('settings.restore_file_required'))
+    return
+  }
+  if (!window.confirm(t('settings.restore_confirm'))) {
+    return
+  }
+
+  restoringUserData.value = true
+  try {
+    await userRestore(restoreFile.value, restorePasswordInput.value)
+    alert(t('settings.restore_success'))
+    await fetchSettings()
+    store.logout('restored')
+    router.replace('/login')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('settings.restore_failed')
+    alert(message)
+  } finally {
+    restoringUserData.value = false
   }
 }
 
@@ -637,6 +704,68 @@ onMounted(() => {
         </div>
       </article>
 
+      <article v-if="store.isAdmin" class="card">
+        <h3 class="card__title">{{ t('settings.backup_restore') }}</h3>
+        <div class="card__body">
+          <p class="field__hint">{{ t('settings.backup_restore_desc') }}</p>
+
+          <div class="field">
+            <span class="field__label">{{ t('settings.backup_password') }}</span>
+            <div class="input-row">
+              <input
+                v-model="backupPasswordInput"
+                class="config-input"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="t('settings.backup_password_placeholder')"
+                @keyup.enter="handleBackupUserData"
+              />
+              <button
+                class="btn btn--sm"
+                @click="handleBackupUserData"
+                :disabled="backingUpUserData || restoringUserData"
+              >
+                {{ backingUpUserData ? t('settings.backing_up') : t('settings.backup_button') }}
+              </button>
+            </div>
+            <span class="field__hint">{{ t('settings.backup_password_hint') }}</span>
+          </div>
+
+          <div class="field">
+            <span class="field__label">{{ t('settings.restore_file') }}</span>
+            <input
+              class="file-input"
+              type="file"
+              accept=".json,application/json"
+              @change="handleRestoreFileChange"
+            />
+            <span class="field__hint">{{ t('settings.restore_file_hint') }}</span>
+          </div>
+
+          <div class="field">
+            <span class="field__label">{{ t('settings.restore_password') }}</span>
+            <div class="input-row">
+              <input
+                v-model="restorePasswordInput"
+                class="config-input"
+                type="password"
+                autocomplete="current-password"
+                :placeholder="t('settings.restore_password_placeholder')"
+                @keyup.enter="handleRestoreUserData"
+              />
+              <button
+                class="btn btn--sm btn--danger"
+                @click="handleRestoreUserData"
+                :disabled="backingUpUserData || restoringUserData"
+              >
+                {{ restoringUserData ? t('settings.restoring') : t('settings.restore_button') }}
+              </button>
+            </div>
+            <span class="field__hint">{{ t('settings.restore_password_hint') }}</span>
+          </div>
+        </div>
+      </article>
+
       <article v-if="store.isAdmin" class="card card--danger">
         <h3 class="card__title">{{ t('settings.reset') }}</h3>
         <div class="card__body">
@@ -785,6 +914,15 @@ onMounted(() => {
 .config-input:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+.file-input {
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
 }
 
 .btn--sm {

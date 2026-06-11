@@ -64,4 +64,6 @@ const (
 	ErrorCodeDownloadOpenFailed   = 1029 // 打开下载文件失败
 	ErrorCodeSettingsGetFailed    = 1030 // 获取系统配置失败
 	ErrorCodeSettingsUpdateFailed = 1031 // 更新系统配置失败
+	ErrorCodeBackupFailed         = 1032 // 备份用户数据失败
+	ErrorCodeRestoreFailed        = 1033 // 还原用户数据失败
 )

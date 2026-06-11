@@ -59,7 +59,7 @@ func (u *SettingsUseCase) GetSettings() SettingsView {
 func normalizeAppVersion(version string) string {
 	trimmed := strings.TrimSpace(version)
 	if trimmed == "" {
-		return "v1.2"
+		return "v1.3"
 	}
 	return trimmed
 }

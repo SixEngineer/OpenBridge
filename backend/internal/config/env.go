@@ -159,7 +159,7 @@ func defaultEnvValues() map[string]string {
 		"APP_NAME":                 "OpenBridge",
 		"APP_ENV":                  "dev",
 		"APP_PORT":                 "8080",
-		"APP_VERSION":              "v1.2",
+		"APP_VERSION":              "v1.3",
 		"APP_AUTO_OPEN_BROWSER":    "true",
 		"DB_PATH":                  "./data/openbridge.db",
 		"ARIA2_RPC_URL":            "http://127.0.0.1:6800/jsonrpc",
